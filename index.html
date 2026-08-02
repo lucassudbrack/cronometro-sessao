@@ -629,6 +629,28 @@ function save(){ if(st) return; st=setTimeout(saveNow,900); }   // só o que mud
 async function restore(){ if(!store) return null;
   try{ const r=await store.get(KEY); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
 
+// Aplica um snapshot ao estado vivo. Função nomeada e não trecho solto dentro
+// do boot porque é o caminho mais caro de errar do app inteiro: se ele estiver
+// errado, o prejuízo é uma sessão de estudo, e só se descobre já perdida.
+function retomar(prev){
+  pending=null;
+  N=prev.N; goal=prev.goal||0; nItens=prev.nItens||5; nAlt=prev.nAlt||5; tag=prev.tag||"";
+  times=prev.times||{}; log=prev.log||[]; ans=prev.ans||{}; events=prev.events||[];
+  pags=prev.pags||{}; ficha=Object.assign(fichaVazia(),prev.ficha||{}); olhar=prev.olhar||{};
+  if(prev.visit){
+    // A passada que estava aberta vira passada fechada, valendo o que foi medido
+    // até o último registro. trunc diz que esse número é piso, não medida completa.
+    const v=Object.assign({},prev.visit);
+    if(prev.running) v.trunc=true;
+    log.push(v);
+    events.push({t:iso(prev.ts||Date.now()), ev:"recover", q:v.q, sec:sec1(v.sec),
+      truncada:!!v.trunc, obs:"tempo entre o último registro e a retomada não foi medido"});
+  }
+  visit=null; sessionAccum=prev.sessionAccum||0; sessionStart=null; running=false;
+  started=true; exported=false; curQ=null; sairRev();
+  buildGrid(); paint(); showPane("paneGrid"); closeEnd(); $("setup").classList.add("hide"); saveNow();
+}
+
 // Enquanto o cronômetro corre, encosta o disco no relógio a cada 5 s. Sem isso,
 // pensar cinco minutos numa questão sem tocar em nada deixaria 5 min de janela.
 setInterval(()=>{ if(running) saveNow(); }, 5000);
@@ -919,23 +941,7 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden && runnin
     $("nIn").value=prev.N;
     if(prev.goal) $("goalIn").value=prev.goal/60;
     if(prev.tag) $("tagIn").value=prev.tag;
-    $("resumeLink").onclick=e=>{
-      e.preventDefault(); pending=null;
-      N=prev.N; goal=prev.goal||0; nItens=prev.nItens||5; nAlt=prev.nAlt||5; tag=prev.tag||"";
-      times=prev.times||{}; log=prev.log||[]; ans=prev.ans||{}; events=prev.events||[];
-      pags=prev.pags||{}; ficha=Object.assign(fichaVazia(),prev.ficha||{}); olhar=prev.olhar||{};
-      if(prev.visit){
-        // A passada que estava aberta virou passada fechada, com o valor medido até
-        // o último registro. trunc diz que esse número é piso, não medida completa.
-        const v=Object.assign({},prev.visit);
-        if(prev.running) v.trunc=true;
-        log.push(v);
-        events.push({t:iso(prev.ts||Date.now()), ev:"recover", q:v.q, sec:sec1(v.sec),
-          truncada:!!v.trunc, obs:"tempo entre o último registro e a retomada não foi medido"});
-      }
-      visit=null; sessionAccum=prev.sessionAccum||0; sessionStart=null; running=false; started=true;
-      buildGrid(); paint(); showPane("paneGrid"); $("setup").classList.add("hide"); saveNow();
-    };
+    $("resumeLink").onclick=e=>{ e.preventDefault(); retomar(prev); };
   }
 })();
 tick();
