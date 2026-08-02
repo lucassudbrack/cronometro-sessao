@@ -17,12 +17,32 @@ Cada sessão fica guardada no aparelho, na sua própria chave, e só some quando
 você manda excluir. A lista aparece no topo da tela inicial. O nome é montado
 sozinho a partir da identificação e serve de nome de arquivo e de apelido:
 
-    aaaammdd_concurso_materia_tiposessao_fonte
+    aaaammdd_concurso_materia_subtopico_tiposessao_fonte
 
 **Tipo de sessão** decide se corre o relógio: *prova* e *teste* correm,
 *aprendizado* não. Sem relógio, as passadas e as marcações continuam sendo
 registradas e o tempo sai **vazio** no export — zero afirmaria que a questão
 levou zero segundo.
+
+## Modelo de prova e pesos
+
+No setup você diz **quais tipos a prova tem** — o que estiver desligado some do
+setup e do seletor de tipo da questão. Com um tipo só, a questão já nasce com
+ele: não há o que descobrir lendo.
+
+E define o **peso de cada item**, acerto e erro, em múltiplos de X. Branco vale
+0, anulado fica fora da conta. O app não arbitra regra de pontuação — aplica a
+que você declarar.
+
+O dropdown de modelo preenche tudo de uma vez:
+
+| modelo | tipos | formato | pesos |
+|---|---|---|---|
+| ANPEC | C/E, conta | 5 itens · 2 dígitos | C/E +X / −X · conta +5X / 0 |
+| BACEN | só C/E | 1 item ⚠ | +X / −0,5X |
+
+⚠ O nº de itens do BACEN está em 1 por questão, padrão Cebraspe — confira no
+edital antes de valer.
 
 ## Usar
 
@@ -113,7 +133,8 @@ O bloco de metadados são linhas de comentário `#` — leia com
 `pandas.read_csv(f, comment="#")`. No tipo B a resposta vai em `numerica` e a
 coluna `itens` carrega a confiança e as flags daquele item. `param` é o nº de
 itens em A, de alternativas em ME, de dígitos em B. `gabarito` usa o mesmo
-alfabeto de `itens`, com `X` para anulada e vazio para sem gabarito.
+alfabeto de `itens`, com `X` para anulada e vazio para sem gabarito. `pontos` é
+a soma dos pesos dos itens daquela questão.
 
 `<nome>_eventos.jsonl` — log append-only, cronológico, uma linha por evento
 (`meta`, `passada`, `enter`, `leave`, `mark`, `flag`, `pag`, `ficha`, `olhar`,

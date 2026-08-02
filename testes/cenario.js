@@ -166,17 +166,17 @@ const cols = csv.find(l => l.startsWith("q,apelido"));
 const rows = csv.slice(csv.indexOf(cols) + 1);
 EQ("um unico cabecalho de colunas", csv.filter(l => l.startsWith("q,apelido")).length, 1);
 EQ("nenhuma linha antes do bloco de comentario", csv[0].startsWith("#"), true);
-EQ("colunas", cols, "q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito");
+EQ("colunas", cols, "q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito,pontos");
 EQ("valor com virgula fica citado",
    head.find(l => l.startsWith("# fonte")), '# fonte,"PDF, misto"');
 EQ("o bloco abre pelo nome da sessao",
    head.find(l => l.startsWith("# sessao")), "# sessao,20260802_anpec_estatistica_prova_pdf_misto");
 EQ("e diz que foi cronometrada", head.find(l => l.startsWith("# cronometrada")), "# cronometrada,1");
 EQ("materia no bloco", head.find(l => l.startsWith("# materia")), "# materia,Estatística");
-EQ("linha da Q1", rows[0], '1,1,A,5,"Vc F? V - FxB",,90,01:30,3,1,1,1,""');
-EQ("linha da Q2 tipo B", rows[1], '2,2,B,3,"?",042,30,00:30,1,2,1,,""');
-EQ("linha da Q3", rows[2], '3,3,,,"",,15,00:15,1,3,1,1,""');
-EQ("linha da Q4 com pagina", rows[3], '4,7-8,,,"",,50,00:50,1,7-8,,,""');
+EQ("linha da Q1", rows[0], '1,1,A,5,"Vc F? V - FxB",,90,01:30,3,1,1,1,"",');
+EQ("linha da Q2 tipo B", rows[1], '2,2,B,3,"?",042,30,00:30,1,2,1,,"",');
+EQ("linha da Q3", rows[2], '3,3,,,"",,15,00:15,1,3,1,1,"",');
+EQ("linha da Q4 com pagina", rows[3], '4,7-8,,,"",,50,00:50,1,7-8,,,"",');
 EQ("duracao total no bloco",
    head.find(l => l.startsWith("# duracao_total")), "# duracao_total,03:05");
 EQ("Q3 fechada quando o fechamento parou o cronometro", Math.round(times[3]), 15);
@@ -425,9 +425,9 @@ const csv6 = buildCSV().split("\n");
 const c6 = csv6.find(l => l.startsWith("q,apelido"));
 const r6 = csv6.slice(csv6.indexOf(c6) + 1);
 EQ("gabarito de tipo A na coluna, com o anulado",
-   r6[0].split(",").pop(), '"V X F"');
-EQ("gabarito de ME", r6[1].split(",").pop(), '"B"');
-EQ("gabarito de conta e o numero", r6[2].split(",").pop(), '"42"');
+   r6[0].split(",").slice(-2)[0], '"V X F"');
+EQ("gabarito de ME", r6[1].split(",").slice(-2)[0], '"B"');
+EQ("gabarito de conta e o numero", r6[2].split(",").slice(-2)[0], '"42"');
 EQ("bloco traz a contagem",
    csv6.filter(l => /^# itens_(conferem|divergem|anulados)/.test(l)),
    ["# itens_conferem,2", "# itens_divergem,1", "# itens_anulados,1"]);
@@ -671,7 +671,7 @@ EQ("total de itens bate com a folha",
 const est = buildEstat().split("\n");
 EQ("o arquivo de estatisticas tem cabecalho proprio",
    est.find(l => l.startsWith("tipo,")),
-   "tipo,confianca,sem_tempo,deixaria_branco,resultado,itens");
+   "tipo,confianca,sem_tempo,deixaria_branco,resultado,itens,pontos");
 EQ("e so linhas de comentario antes dele",
    est.slice(0, est.indexOf(est.find(l => l.startsWith("tipo,")))).every(l => l.startsWith("#")), true);
 EQ("uma linha por combinacao ocorrida",
@@ -696,6 +696,95 @@ doExport();
 EQ("o export sai com tres arquivos", window.__files.map(f => f.name.replace(/^[^_]*_/, "")),
    ["anpec_calib_prova.csv", "anpec_calib_prova_estatisticas.csv",
     "anpec_calib_prova_eventos.jsonl"].slice(0, window.__files.length));
+
+/* ---- cenário 11: modelos de prova, tipos desligados e pesos ---- */
+Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
+idx = []; sid = null;
+const tipoVisivel = t => document.querySelector('#typeRow button[data-t="' + t + '"]').style.display !== "none";
+const campoVisivel = k => $("fld" + k).style.display !== "none";
+
+// ANPEC
+$("tpl").value = "anpec"; $("tpl").dispatchEvent(new Event("change"));
+EQ("ANPEC: C/E com 5 itens", cfgA, 5);
+EQ("ANPEC: conta com 2 digitos", cfgB, 2);
+EQ("ANPEC: nao tem multipla escolha", usa.ME, false);
+EQ("ANPEC: pesos de C/E", [pesos.A.acerto, pesos.A.erro], [1, -1]);
+EQ("ANPEC: conta acerta 5X e erra 0", [pesos.B.acerto, pesos.B.erro], [5, 0]);
+EQ("multipla some do setup", campoVisivel("ME"), false);
+EQ("e some do seletor de tipo da questao", tipoVisivel("ME"), false);
+EQ("mas C/E e conta continuam la", [tipoVisivel("A"), tipoVisivel("B")], [true, true]);
+EQ("a tabela de pesos so mostra os tipos em uso",
+   [...$("pesos").querySelectorAll(".rot")].map(r => r.textContent), ["C / E", "Conta"]);
+
+// BACEN
+$("tpl").value = "bacen"; $("tpl").dispatchEvent(new Event("change"));
+EQ("BACEN: so C/E", [usa.A, usa.ME, usa.B], [true, false, false]);
+EQ("BACEN: acerto X e erro -0,5X", [pesos.A.acerto, pesos.A.erro], [1, -0.5]);
+EQ("BACEN: 1 item por questao (padrao Cebraspe, a confirmar no edital)", cfgA, 1);
+EQ("a nota do modelo avisa que e para conferir",
+   /edital/.test($("tplHint").textContent), true);
+
+// com um tipo só, a questão já nasce com ele
+$("mConc").value = "BACEN"; $("mConc").dispatchEvent(new Event("change"));
+$("mMat").value = "Direito"; $("mMat").dispatchEvent(new Event("change"));
+$("mSub").value = "Administrativo"; $("mSub").dispatchEvent(new Event("change"));
+$("mFonte").value = ""; $("mFonte").dispatchEvent(new Event("change"));
+EQ("subtopico entra no nome do arquivo", nomeBase(),
+   "20260802_bacen_direito_administrativo_prova");
+$("nIn").value = "4"; apelidos = {}; paintApelidos();
+$("startBtn").click();
+select(1);
+EQ("tipo unico ja vem escolhido", ans[1] && ans[1].tipo, "A");
+EQ("e o log diz que foi automatico",
+   events.filter(e => e.ev === "tipo").pop().auto, true);
+EQ("com 1 item, a folha abre direto", ans[1].itens.length, 1);
+
+// não dá para desligar o último tipo
+usa.A = true; usa.ME = false; usa.B = false;
+document.querySelector('#segUsa button[data-u="A"]').click();
+EQ("desligar o ultimo tipo e recusado", usa.A, true);
+
+// pontuação com os pesos do BACEN
+[...document.querySelectorAll("#answerArea .opts button")].find(b => b.textContent === "Vc").click();
+select(2); [...document.querySelectorAll("#answerArea .opts button")].find(b => b.textContent === "Fc").click();
+select(3); [...document.querySelectorAll("#answerArea .opts button")].find(b => b.textContent === "V?").click();
+select(4); [...document.querySelectorAll("#answerArea .opts button")].find(b => b.textContent === "—").click();
+setRunning(false);
+gab[1] = { itens: ["V"], num: "" };   // acerto  -> +1
+gab[2] = { itens: ["V"], num: "" };   // erro    -> -0,5
+gab[3] = { itens: ["F"], num: "" };   // erro    -> -0,5
+gab[4] = { itens: ["V"], num: "" };   // branco  ->  0
+EQ("pontos pelos pesos declarados", pontos(false), 0);
+EQ("maximo possivel", pontosMax(), 4);
+EQ("pontos por questao", [1, 2, 3, 4].map(pontosQ), [1, -0.5, -0.5, 0]);
+
+// o mesmo set com os pesos da ANPEC dá outro número, e é só o peso que muda
+pesos.A = { acerto: 1, erro: -1 };
+EQ("trocar o peso muda so a conta", [pontos(false), pontosMax()], [-1, 4]);
+pesos.A = { acerto: 1, erro: -0.5 };
+
+// flag B: quanto valeria se eu tivesse deixado em branco o que marquei como B
+ans[3].itens[0].B = true;
+EQ("respeitando os B, o erro da Q3 sai da conta", pontos(true), 0.5);
+EQ("e sem respeitar continua valendo", pontos(false), 0);
+
+const h11 = buildCSV().split("\n").filter(l => l.startsWith("#"));
+const v11 = k => (h11.find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];
+EQ("os pesos vao no bloco",
+   [v11("peso_A_acerto"), v11("peso_A_erro")], ["1", "-0.5"]);
+EQ("so os tipos em uso aparecem no bloco",
+   h11.some(l => l.startsWith("# peso_B_")), false);
+EQ("o bloco declara os tipos da prova e o modelo",
+   [v11("tipos_na_prova"), v11("modelo")], ["A", "bacen"]);
+EQ("e os pontos", [v11("pontos"), v11("pontos_maximo"), v11("pontos_se_respeitasse_B")],
+   ["0", "4", "0.5"]);
+const est11 = buildEstat().split("\n");
+EQ("o arquivo de estatisticas ganhou a coluna de pontos",
+   est11.find(l => l.startsWith("tipo,")),
+   "tipo,confianca,sem_tempo,deixaria_branco,resultado,itens,pontos");
+EQ("a soma da coluna bate com o total",
+   est11.slice(est11.indexOf(est11.find(l => l.startsWith("tipo,"))) + 1)
+        .reduce((s, l) => s + parseFloat(l.split(",").pop()), 0), 0);
 
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +

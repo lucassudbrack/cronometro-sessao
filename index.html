@@ -187,6 +187,16 @@
   body.semcrono .cronoOnly{display:none}
   .seg3{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
   .seg3 button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
+  .seg3 button.off{opacity:.4; text-decoration:line-through}
+  select{font-family:var(--ui); font-weight:600; font-size:12px; color:var(--paper);
+    background:var(--sunken); border:1px solid var(--line); border-radius:3px;
+    padding:9px 8px; width:100%; -webkit-appearance:none; appearance:none}
+  .pesos{display:grid; grid-template-columns:auto 1fr 1fr; gap:5px; align-items:center}
+  .pesos .cab{font-size:9px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--mute); text-align:center; font-weight:600}
+  .pesos .rot{font-family:var(--mono); font-size:11px; color:var(--paper); padding-right:4px}
+  .pesos input{text-align:center; padding:7px 4px; font-size:13px}
+  .pesos input.neg{color:var(--alert)}
   .ident{flex:1; min-width:0; font-family:var(--mono); font-size:11px; line-height:1.5;
     color:var(--paper); background:var(--sunken); border:1px solid var(--line);
     border-radius:3px; padding:8px; word-break:break-all}
@@ -202,7 +212,7 @@
   .sinfo span.aberta{color:var(--alert)}
   .srow button{flex:0 0 auto; padding:7px 9px; font-size:9px}
   .srow button.del{color:var(--alert); border-color:var(--dim); padding:7px 8px}
-  .sheet .hint{font-size:10px; line-height:1.45; color:var(--dim); margin:0}
+  .sheet .hint{font-size:10px; line-height:1.45; color:var(--dim); margin:0; overflow-wrap:anywhere}
   .sheet .row2{display:flex; gap:6px; align-items:stretch}
   .sheet .row2 button{flex:0 0 auto; white-space:nowrap}
   .ograde{display:grid; gap:5px; grid-template-columns:repeat(auto-fill,minmax(42px,1fr))}
@@ -317,6 +327,11 @@
     <span class="eyebrow">Sessões guardadas</span>
     <div class="sess" id="sessList"></div>
   </div>
+  <div class="field soNova">
+    <span class="eyebrow">Modelo de prova</span>
+    <select id="tpl"></select>
+    <p class="hint" id="tplHint"></p>
+  </div>
   <div class="field">
     <span class="eyebrow">Tipo de sessão</span>
     <div class="seg3" id="segTipo">
@@ -347,16 +362,30 @@
     <div class="apl" id="aplList"></div>
   </div>
   <div class="field soNova">
+    <span class="eyebrow">Tipos de questão que esta prova tem</span>
+    <div class="seg3" id="segUsa">
+      <button data-u="A">C / E</button>
+      <button data-u="ME">Múltipla</button>
+      <button data-u="B">Conta</button>
+    </div>
+    <p class="hint">O que estiver desligado some do setup e não aparece na hora de declarar o tipo da questão.</p>
+  </div>
+  <div class="field soNova" id="fldA">
     <span class="eyebrow">C / E — itens por questão</span>
     <div class="numseg" id="segA"></div>
   </div>
-  <div class="field soNova">
+  <div class="field soNova" id="fldME">
     <span class="eyebrow">Múltipla — alternativas</span>
     <div class="numseg" id="segME"></div>
   </div>
-  <div class="field soNova">
+  <div class="field soNova" id="fldB">
     <span class="eyebrow">Conta — dígitos</span>
     <div class="numseg" id="segB"></div>
+  </div>
+  <div class="field">
+    <span class="eyebrow">Peso por item, em múltiplos de X</span>
+    <div class="pesos" id="pesos"></div>
+    <p class="hint">Acerto e erro de cada tipo. Branco é sempre 0 e anulado fica fora da conta.</p>
   </div>
   <p class="soNova" style="margin:-4px 0 0;font-size:10px;line-height:1.45;color:var(--dim)">
     <b style="color:var(--mute)">na hora</b> deixa o eixo em aberto: você escolhe questão a questão,
@@ -431,6 +460,23 @@ let N=15, goal=0;
 // O tipo da questão nunca é decidido no setup — só se descobre lendo.
 let cfgA=5, cfgME=5, cfgB=3;
 const LETRAS="ABCDEFGHIJ";
+// Que tipos esta prova tem. O que estiver desligado some do setup e do seletor
+// de tipo da questão — não adianta oferecer "conta" numa prova que não tem.
+let usa={A:true, ME:true, B:true};
+// Peso de cada item em múltiplos de X. Branco é sempre 0 e anulado fica fora.
+// A regra de pontuação é da prova; o app só aplica a que você declarar aqui.
+const pesosPadrao = () => ({A:{acerto:1,erro:-1}, ME:{acerto:1,erro:0}, B:{acerto:1,erro:0}});
+let pesos=pesosPadrao();
+// Modelos conhecidos. O que não estiver aqui fica em aberto, e não chutado.
+const TEMPLATES={
+  livre: {nome:"Livre — eu configuro", nota:""},
+  anpec: {nome:"ANPEC", nota:"5 itens por questão de C/E · sem múltipla escolha · conta com 2 dígitos · C/E vale +X e −X · conta vale +5X e 0.",
+    usa:{A:true,ME:false,B:true}, cfgA:5, cfgB:2,
+    pesos:{A:{acerto:1,erro:-1}, B:{acerto:5,erro:0}}},
+  bacen: {nome:"BACEN", nota:"Só C/E, acerto +X e erro −0,5X. O nº de itens está em 1 por questão (padrão Cebraspe) — confira no edital antes de valer.",
+    usa:{A:true,ME:false,B:false}, cfgA:1,
+    pesos:{A:{acerto:1,erro:-0.5}}}
+};
 let times={}, log=[], visit=null, ans={}, events=[];
 // pags vive fora de ans de propósito: a página do caderno é fato físico da sessão,
 // não parte da resposta. Trocar o tipo da questão zera ans[q] e não pode levar a página junto.
@@ -543,7 +589,12 @@ function showPane(id){
   ["paneGrid","paneQ","paneLog","paneRev","paneGab"].forEach(p=>$(p).classList.toggle("on", p===id));
   $("viewBtn").textContent = id==="paneLog" ? "Grade" : "Trilha";
 }
-function openQ(q){ curQ=q; renderQ(); showPane("paneQ"); }
+function openQ(q){
+  // Se a prova só tem um tipo, não há o que descobrir lendo: já entra escolhido.
+  const so=["A","ME","B"].filter(k=>usa[k]);
+  if(!ans[q] && so.length===1){ ans[q]=blankAns(so[0]); ev({ev:"tipo",q:q,tipo:so[0],auto:true}); }
+  curQ=q; renderQ(); showPane("paneQ");
+}
 
 /* ---------- grade ---------- */
 function buildGrid(){
@@ -898,7 +949,7 @@ function snapshot(){
       vis.sec+=d; t[visit.q]=(t[visit.q]||0)+d;
     }
   }
-  return {fmt:3,nome:nomeBase(),N,goal,cfgA,cfgME,cfgB,cronometrar,times:t,log,visit:vis,ans,pags,apelidos,ficha,olhar,gab,gabAberto,events,
+  return {fmt:4,nome:nomeBase(),N,goal,cfgA,cfgME,cfgB,usa,pesos,cronometrar,times:t,log,visit:vis,ans,pags,apelidos,ficha,olhar,gab,gabAberto,events,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -943,6 +994,9 @@ function retomar(prev){
   cfgA  = prev.cfgA  !== undefined ? prev.cfgA  : (prev.nItens || 5);
   cfgME = prev.cfgME !== undefined ? prev.cfgME : (prev.nAlt   || 5);
   cfgB  = prev.cfgB  !== undefined ? prev.cfgB  : 3;
+  usa   = Object.assign({A:true,ME:true,B:true}, prev.usa||{});
+  pesos = pesosPadrao();
+  Object.keys(prev.pesos||{}).forEach(k=>{ if(pesos[k]) pesos[k]=Object.assign(pesos[k],prev.pesos[k]); });
   times=prev.times||{}; log=prev.log||[]; ans=prev.ans||{}; events=prev.events||[];
   Object.keys(ans).forEach(q=>{
     const a=ans[q];
@@ -962,7 +1016,8 @@ function retomar(prev){
       truncada:!!v.trunc, obs:"tempo entre o último registro e a retomada não foi medido"});
   }
   visit=null; sessionAccum=prev.sessionAccum||0; sessionStart=null; running=false;
-  started=true; exported=false; curQ=null; sairRev(); pintaTipo(); pintaNome();
+  started=true; exported=false; curQ=null; sairRev();
+  pintaTipo(); pintaNome(); pintaTpl(); pintaUsa(); pintaEixos(); pintaPesos();
   buildGrid(); paint(); showPane("paneGrid"); closeEnd(); $("setup").classList.add("hide"); saveNow();
 }
 
@@ -1042,7 +1097,9 @@ function paintGab(){
     n(c.branco,"em branco","em branco")+"<br>"+
     n(c.anulado,"anulado","anulados")+" (fora da prova) · "+
     n(c.sem,"ainda sem gabarito","ainda sem gabarito")+"<br>"+
-    "<span style='color:var(--dim)'>contagem crua de itens, não é nota — a regra de pontuação é da prova, não do app</span>";
+    "<b>"+pontos(false)+"</b> de <b>"+pontosMax()+"</b> pontos"+
+    (pontos(true)!==pontos(false) ? " · <b>"+pontos(true)+"</b> respeitando os B" : "")+"<br>"+
+    "<span style='color:var(--dim)'>pontos pelos pesos declarados no setup; branco vale 0 e anulado fica fora</span>";
   el.appendChild(t);
 
   let algum=false;
@@ -1237,7 +1294,7 @@ const sluglow = s => (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"")
   .toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
 function nomeBase(){
   const d=(ficha.data||hojeISO()).replace(/-/g,"");
-  return [d, ficha.concurso, ficha.mat, ficha.tipo, ficha.fonte]
+  return [d, ficha.concurso, ficha.mat, ficha.sub, ficha.tipo, ficha.fonte]
     .map(sluglow).filter(Boolean).join("_");
 }
 function pintaTipo(){
@@ -1343,6 +1400,39 @@ const olharList = () => Object.keys(olhar).filter(q=>olhar[q]).map(Number).sort(
    outro, e misturar grãos no mesmo arquivo é o que estraga a análise depois.
    Combinação que não aparece é zero.                                        */
 const RES={ok:"acerto", erro:"erro", branco:"branco", anulado:"anulado", sem:"sem_gabarito"};
+// Pontuação. Branco vale 0; anulado e item sem gabarito ficam fora da conta.
+// O app não arbitra regra nenhuma: aplica exatamente os pesos declarados no setup.
+const num1 = x => Math.round(x*100)/100;
+function pontosDoItem(q,i,respeitaB){
+  const a=ans[q]; if(!a) return 0;
+  const res=confere(q,i);
+  if(res==="anulado" || res==="sem" || res==="branco") return 0;
+  if(respeitaB && a.itens[i].B) return 0;      // teria deixado em branco na prova real
+  return pesos[a.tipo][res==="ok"?"acerto":"erro"];
+}
+function pontos(respeitaB){
+  let s=0;
+  for(let q=1;q<=N;q++){
+    const a=ans[q]; if(!a || paramDe(a)==null) continue;
+    a.itens.forEach((_,i)=>{ s+=pontosDoItem(q,i,respeitaB); });
+  }
+  return num1(s);
+}
+function pontosQ(q){
+  const a=ans[q]; if(!a || paramDe(a)==null) return null;
+  let s=0, tem=false;
+  a.itens.forEach((_,i)=>{ if(confere(q,i)!=="sem"){ tem=true; s+=pontosDoItem(q,i,false); } });
+  return tem ? num1(s) : null;
+}
+function pontosMax(){        // todo item com gabarito e não anulado, acertado
+  let s=0;
+  for(let q=1;q<=N;q++){
+    const a=ans[q]; if(!a || paramDe(a)==null) continue;
+    a.itens.forEach((_,i)=>{ const r=confere(q,i);
+      if(r!=="anulado" && r!=="sem") s+=pesos[a.tipo].acerto; });
+  }
+  return num1(s);
+}
 function estatTidy(){
   const m=new Map();
   for(let q=1;q<=N;q++){
@@ -1375,8 +1465,14 @@ function buildEstat(){
   L.push("# sem_tempo,"+csvv("1 = item marcado com T, não tive tempo de pensar"));
   L.push("# deixaria_branco,"+csvv("1 = item marcado com B, deixaria em branco na prova real"));
   L.push("# resultado,"+csvv("acerto | erro | branco | anulado | sem_gabarito"));
-  L.push("tipo,confianca,sem_tempo,deixaria_branco,resultado,itens");
-  E.forEach(r=>L.push([r.tipo,r.confianca,r.sem_tempo,r.deixaria_branco,r.resultado,r.itens].join(",")));
+  L.push("# pontos,"+csvv("itens × peso do resultado; branco, anulado e sem gabarito valem 0"));
+  L.push("tipo,confianca,sem_tempo,deixaria_branco,resultado,itens,pontos");
+  E.forEach(r=>{
+    const p = r.resultado==="acerto" ? pesos[r.tipo].acerto
+            : r.resultado==="erro"   ? pesos[r.tipo].erro : 0;
+    L.push([r.tipo,r.confianca,r.sem_tempo,r.deixaria_branco,r.resultado,r.itens,
+            num1(r.itens*p)].join(","));
+  });
   return L.join("\n");
 }
 
@@ -1440,11 +1536,20 @@ function buildCSV(){
   L.push("# sem_tempo_acertos,"+sm(r=>r.sem_tempo===1&&acerto(r)));
   L.push("# sem_tempo_erros,"+sm(r=>r.sem_tempo===1&&erro(r)));
   L.push("# sem_tempo_brancos,"+sm(r=>r.sem_tempo===1&&r.resultado==="branco"));
+  L.push("# pontos,"+pontos(false));
+  L.push("# pontos_maximo,"+pontosMax());
+  L.push("# pontos_se_respeitasse_B,"+pontos(true));
+  ["A","ME","B"].forEach(tp=>{ if(!usa[tp]) return;
+    L.push("# peso_"+tp+"_acerto,"+pesos[tp].acerto);
+    L.push("# peso_"+tp+"_erro,"+pesos[tp].erro); });
+  L.push("# tipos_na_prova,"+csvv(["A","ME","B"].filter(k=>usa[k]).join(" ")));
+  L.push("# modelo,"+csvv(ficha.template||"livre"));
   L.push("# estatisticas_completas_em,"+csvv(nomeBase()+"_estatisticas.csv"));
   L.push("# pag_auto,"+csvv("1 = a pagina veio da ordem das questoes, nao foi conferida"));
   const ef=pagsEfetivas();
   L.push("# apelido,"+csvv("nome da questao; sem apelido, e a pagina a que ela se refere"));
-  L.push("q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito");
+  L.push("# pontos,"+csvv("soma dos pesos dos itens da questão; vazio se ela não tem gabarito"));
+  L.push("q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito,pontos");
   for(let q=1;q<=N;q++){
     const a=ans[q]; const t=times[q]||0;
     // passes() entra no filtro porque em sessão sem relógio uma questão visitada
@@ -1456,7 +1561,8 @@ function buildCSV(){
     const temT = times[q]!==undefined;
     L.push([q,csvv(rotulo(q)),tipo,paramDe(a)||"",'"'+itens+'"',num,
             temT?Math.round(t):"", temT?fmt(t):"", passes(q),
-            csvv(ef[q]?ef[q].v:""), (ef[q]&&ef[q].auto)?1:"", olhar[q]?1:"",'"'+gabStr(q)+'"'].join(","));
+            csvv(ef[q]?ef[q].v:""), (ef[q]&&ef[q].auto)?1:"", olhar[q]?1:"",'"'+gabStr(q)+'"',
+            pontosQ(q)===null?"":pontosQ(q)].join(","));
   }
   return L.join("\n");
 }
@@ -1473,6 +1579,9 @@ function buildJSONL(){
     data:ficha.data||null, concurso:ficha.concurso||null,
     materia:ficha.mat||null, subtopico:ficha.sub||null, fonte:ficha.fonte||null,
     tipo_sessao:ficha.tipo||null, cronometrada:cronometrar,
+    modelo:ficha.template||"livre", tipos_na_prova:["A","ME","B"].filter(k=>usa[k]),
+    pesos:JSON.parse(JSON.stringify(pesos)),
+    pontos:pontos(false), pontos_maximo:pontosMax(), pontos_se_respeitasse_B:pontos(true),
     itens_da_prova:ficha.itens?+ficha.itens:null, itens_julgaveis_no_set:itensDoSet(),
     olhar:olharList(), pags:Object.assign({},pags), apelidos:Object.assign({},apelidos),
     pags_efetivas:pagsEfetivas(),
@@ -1583,6 +1692,73 @@ $("newBtn").onclick=()=>{
   $("setup").classList.remove("hide"); $("setup").scrollTop=0;
 };
 
+const NOME_TIPO={A:"C / E", ME:"Múltipla", B:"Conta"};
+function pintaUsa(){
+  document.querySelectorAll("#segUsa button").forEach(b=>{
+    b.classList.toggle("sel", !!usa[b.dataset.u]);
+    b.classList.toggle("off", !usa[b.dataset.u]);
+  });
+  ["A","ME","B"].forEach(k=>{ $("fld"+k).style.display = usa[k] ? "flex" : "none"; });
+  document.querySelectorAll("#typeRow button").forEach(b=>{
+    b.style.display = usa[b.dataset.t] ? "" : "none"; });
+  $("typeRow").style.gridTemplateColumns =
+    "repeat("+Math.max(1,["A","ME","B"].filter(k=>usa[k]).length)+",1fr)";
+}
+document.querySelectorAll("#segUsa button").forEach(b=>b.onclick=()=>{
+  const k=b.dataset.u;
+  if(usa[k] && ["A","ME","B"].filter(x=>usa[x]).length===1){
+    toast("a prova precisa ter ao menos um tipo"); return;
+  }
+  usa[k]=!usa[k]; pintaUsa(); pintaPesos();
+});
+function pintaPesos(){
+  const box=$("pesos"); box.innerHTML="";
+  const cab=t=>{ const d=document.createElement("div"); d.className="cab"; d.textContent=t; box.appendChild(d); };
+  cab(""); cab("acerto"); cab("erro");
+  ["A","ME","B"].forEach(k=>{
+    if(!usa[k]) return;
+    const r=document.createElement("div"); r.className="rot"; r.textContent=NOME_TIPO[k];
+    box.appendChild(r);
+    ["acerto","erro"].forEach(campo=>{
+      const i=document.createElement("input");
+      i.inputMode="decimal"; i.autocomplete="off"; i.value=String(pesos[k][campo]);
+      i.classList.toggle("neg", pesos[k][campo]<0);
+      i.oninput=()=>{
+        const v=parseFloat(String(i.value).replace(",","."));
+        pesos[k][campo] = isNaN(v) ? 0 : v;
+        i.classList.toggle("neg", pesos[k][campo]<0);
+        if(started) paint();
+        save();
+      };
+      i.onchange=()=>{ i.value=String(pesos[k][campo]);
+        if(started) ev({ev:"peso",tipo:k,campo:campo,valor:pesos[k][campo]}); };
+      box.appendChild(i);
+    });
+  });
+}
+function pintaTpl(){
+  const s=$("tpl");
+  if(!s.options.length) Object.keys(TEMPLATES).forEach(k=>{
+    const o=document.createElement("option"); o.value=k; o.textContent=TEMPLATES[k].nome;
+    s.appendChild(o);
+  });
+  s.value=ficha.template||"livre";
+  $("tplHint").textContent=TEMPLATES[s.value] ? TEMPLATES[s.value].nota : "";
+}
+$("tpl").onchange=()=>{
+  const k=$("tpl").value, m=TEMPLATES[k];
+  ficha.template=k;
+  if(m && m.usa){
+    usa=Object.assign({A:false,ME:false,B:false}, m.usa);
+    if(m.cfgA!==undefined) cfgA=m.cfgA;
+    if(m.cfgME!==undefined) cfgME=m.cfgME;
+    if(m.cfgB!==undefined) cfgB=m.cfgB;
+    pesos=pesosPadrao();
+    Object.keys(m.pesos||{}).forEach(t=>pesos[t]=Object.assign({},m.pesos[t]));
+  }
+  pintaTpl(); pintaUsa(); pintaEixos(); pintaPesos();
+};
+
 const EIXOS=[["A","segA",v=>cfgA=v,()=>cfgA],["ME","segME",v=>cfgME=v,()=>cfgME],
              ["B","segB",v=>cfgB=v,()=>cfgB]];
 function pintaEixos(){
@@ -1625,7 +1801,9 @@ $("startBtn").onclick=()=>{
   started=true; ev({ev:"start",questoes:N,sessao:nomeBase(),cronometrada:cronometrar,
     tipo_sessao:ficha.tipo, data:ficha.data, concurso:ficha.concurso,
     materia:ficha.mat, subtopico:ficha.sub, fonte:ficha.fonte,
-    ce_itens:eixo(cfgA), me_alternativas:eixo(cfgME), conta_digitos:eixo(cfgB)});
+    ce_itens:eixo(cfgA), me_alternativas:eixo(cfgME), conta_digitos:eixo(cfgB),
+    modelo:ficha.template||"livre", tipos_na_prova:["A","ME","B"].filter(k=>usa[k]),
+    pesos:JSON.parse(JSON.stringify(pesos))});
   pintaTipo(); pintaNome();
   buildGrid(); paint(); saveNow(); showPane("paneGrid");
   closeEnd(); $("setup").classList.add("hide"); pintaSessoes();
@@ -1641,7 +1819,7 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden && runnin
 
 FICHA.forEach(([k,el])=>$(el).value=ficha[k]||"");
 $("mData").value=ficha.data;
-pintaTipo(); pintaNome(); paintApelidos();
+pintaTipo(); pintaNome(); paintApelidos(); pintaTpl(); pintaUsa(); pintaPesos();
 
 // A versão anterior guardava tudo numa chave só. Se ela existir, vira a
 // primeira sessão da lista em vez de ser perdida.
