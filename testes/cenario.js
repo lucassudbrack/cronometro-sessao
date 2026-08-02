@@ -969,6 +969,24 @@ EQ("gabarito parcial tambem e cobrado, com a contagem",
 
 gab[2] = { itens: ["V", "V"], num: "" };
 EQ("completo, a cobranca some", pendencias().filter(p => /gabarito/.test(p.txt)).length, 0);
+
+// e a linha da pendencia tem que levar para a folha do gabarito, nao para a questao
+gab[2] = { itens: [null, null], num: "" };
+EQ("a pendencia de gabarito declara o destino",
+   pendencias().filter(p => /gabarito/.test(p.txt)).map(p => p.destino), ["gabarito"]);
+EQ("e as outras continuam indo para a questao",
+   pendencias().filter(p => !/gabarito/.test(p.txt)).every(p => p.destino === "questao"), true);
+openRev();
+const linhaGab = [...$("revList").children]
+  .find(r => /sem gabarito/.test(r.textContent));
+linhaGab.click();
+EQ("clicar abre a folha do gabarito", $("paneGab").classList.contains("on"), true);
+EQ("e nao o painel da questao", $("paneQ").classList.contains("on"), false);
+EQ("com a questao certa acesa",
+   [...$("gabList").querySelectorAll(".gq.foco")].map(b => b.querySelector(".qq").textContent),
+   ["Q2"]);
+sairRev();
+gab[2] = { itens: ["V", "V"], num: "" };
 EQ("e agora os quatro T aparecem", indices().T, 4);
 EQ("T passa a dizer a verdade", indices().T, 4);
 

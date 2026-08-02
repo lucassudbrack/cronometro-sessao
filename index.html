@@ -231,6 +231,7 @@
   .endbtns button.alerta{border-color:var(--alert); color:var(--alert)}
 
   /* gabarito */
+  .gq.foco{border-color:var(--brass); background:#2E2718}
   .gq{border:1px solid var(--line); border-radius:4px; padding:8px; margin-bottom:8px; background:var(--chassis-2)}
   .gqhead{display:flex; align-items:baseline; gap:8px; margin-bottom:7px}
   .gqhead .qq{font-family:var(--mono); font-weight:800; font-size:14px}
@@ -1270,6 +1271,18 @@ function openGab(){
   }
   paintGab(); showPane("paneGab");
 }
+// Abre a folha do gabarito rolada até a questão, e a acende por um instante:
+// numa lista de 40 blocos, chegar na tela certa sem saber onde olhar não ajuda.
+function abrirGabEm(q){
+  openGab();
+  const b=[...$("gabList").querySelectorAll(".gq")]
+    .find(x=>x.querySelector(".qq").textContent===rotuloQ(q));
+  if(!b) return;
+  b.scrollIntoView({block:"center"});
+  b.classList.add("foco");
+  clearTimeout(abrirGabEm._t);
+  abrirGabEm._t=setTimeout(()=>b.classList.remove("foco"),1800);
+}
 $("endGab").onclick=openGab;
 $("gabBack").onclick=openEnd;
 
@@ -1279,7 +1292,10 @@ $("gabBack").onclick=openEnd;
    precisa saber, mas não é erro. Nenhum dos dois é preenchido pelo app.     */
 function pendencias(){
   const out=[];
-  const add=(q,tipo,txt)=>out.push({q,tipo,txt});
+  // destino: onde o conserto mora. Quase tudo se conserta no painel da questão,
+  // mas gabarito faltando se conserta na folha do gabarito — mandar para a
+  // questão ali era levar você para uma tela onde não há o que fazer.
+  const add=(q,tipo,txt,destino)=>out.push({q,tipo,txt,destino:destino||"questao"});
   for(let q=1;q<=N;q++){
     const a=ans[q], t=times[q]||0;
     if(!a && !t && !pags[q] && !olhar[q]){ add(q,"aviso","não visitada"); continue; }
@@ -1304,8 +1320,8 @@ function pendencias(){
     // assim que 4 dos 5 itens marcados com T sumiram de branco_por_tempo.
     if(gabAberto && a && paramDe(a)!=null){
       const sg=a.itens.filter((_,i)=>confere(q,i)==="sem").length;
-      if(sg===a.itens.length) add(q,"falta","sem gabarito — sai de todos os índices");
-      else if(sg) add(q,"falta",sg+(sg>1?" itens":" item")+" sem gabarito");
+      if(sg===a.itens.length) add(q,"falta","sem gabarito — sai de todos os índices","gabarito");
+      else if(sg) add(q,"falta",sg+(sg>1?" itens":" item")+" sem gabarito","gabarito");
     }
     if(cronometrar && a && t===0) add(q,"aviso","marcada sem tempo registrado");
 
@@ -1345,21 +1361,22 @@ function paintRev(){
   const el=$("revList");
   if(!ps.length){ el.innerHTML='<div class="allok">Nada pendente. Todas as questões visitadas têm tipo, resposta, confiança e página.</div>'; return; }
   el.innerHTML="";
-  const linha=(rot,tipo,txt,q)=>{
+  const linha=(rot,tipo,txt,q,destino)=>{
     const d=document.createElement("div");
     d.className="prow "+tipo;
     d.innerHTML='<span class="qq"></span><span class="k">'+tipo+'</span>'+
                 '<span class="w"></span>'+(q?'<span class="go">›</span>':'');
     d.querySelector(".qq").textContent=rot;
     d.querySelector(".w").textContent=txt;
-    if(q) d.onclick=()=>abrirParaCorrigir(q); else d.style.cursor="default";
+    if(q) d.onclick=()=>{ if(destino==="gabarito") abrirGabEm(q); else abrirParaCorrigir(q); };
+    else d.style.cursor="default";
     el.appendChild(d);
   };
   // Falta primeiro: é o que faz a análise perder informação. E as não visitadas
   // viram uma linha só, senão um set de 40 com 12 feitas afoga o que importa.
   const naoVis=av.filter(p=>p.txt==="não visitada").map(p=>p.q);
-  f.forEach(p=>linha(rotuloQ(p.q),"falta",p.txt,p.q));
-  av.filter(p=>p.txt!=="não visitada").forEach(p=>linha(rotuloQ(p.q),"aviso",p.txt,p.q));
+  f.forEach(p=>linha(rotuloQ(p.q),"falta",p.txt,p.q,p.destino));
+  av.filter(p=>p.txt!=="não visitada").forEach(p=>linha(rotuloQ(p.q),"aviso",p.txt,p.q,p.destino));
   const auto=pagsAuto();
   if(auto.length) linha("—","aviso",
     auto.length+(auto.length===1?" página veio da ordem, não conferida: "
