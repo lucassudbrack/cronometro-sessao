@@ -1464,8 +1464,11 @@ function estadoDoItem(q,i){
   const it=ans[q].itens[i], r=confere(q,i);
   if(r==="anulado") return "anulado";
   if(r==="sem")     return "sem_gabarito";
-  if(it.T)          return "T";
-  if(r==="branco")  return "S";
+  // T só reivindica o item quando ele está de fato em branco. A interface já
+  // garante isso (T zera a marcação), mas sessão gravada antes dessa regra pode
+  // ter T junto de resposta — ali T queria dizer "respondi com pressa", que é
+  // outra variável. Classificar pela resposta é a leitura menos destrutiva.
+  if(r==="branco")  return it.T ? "T" : "S";
   if(it.B)          return r==="ok" ? "C_B" : "E_B";
   return r==="ok" ? "C_m" : "E_m";
 }
@@ -1508,10 +1511,10 @@ function indices(){
     branco_por_disciplina: r(n.C_B+n.E_B, I),
     valor_do_branco: rr(n.E_B-n.C_B, I),
     valor_do_branco_pontos: rr(evitado-abrido, pontosJogo),
-    acerto_certeza: r(conf.c.ok, conf.c.tot),
-    acerto_duvida:  r(conf["?"].ok, conf["?"].tot),
-    acerto_chute:   r(conf.x.ok, conf.x.tot),
-    acerto_B_palpite: r(n.C_B, n.C_B+n.E_B),
+    acerto_certeza: r(conf.c.ok, conf.c.tot),   n_certeza: conf.c.tot,
+    acerto_duvida:  r(conf["?"].ok, conf["?"].tot), n_duvida: conf["?"].tot,
+    acerto_chute:   r(conf.x.ok, conf.x.tot),   n_chute: conf.x.tot,
+    acerto_B_palpite: r(n.C_B, n.C_B+n.E_B),    n_B_palpite: n.C_B+n.E_B,
     bruto_ponderado: r(ptsAcertoM, pontosJogo)
   };
 }
@@ -1556,8 +1559,8 @@ function buildEstat(){
   L.push("# sem_tempo,"+csvv("1 = item marcado com T, não tive tempo de pensar"));
   L.push("# deixaria_branco,"+csvv("1 = item marcado com B, deixaria em branco na prova real"));
   L.push("# resultado,"+csvv("acerto | erro | branco | anulado | sem_gabarito"));
-  L.push("# pontos,"+csvv("itens × peso do resultado; branco, anulado e sem gabarito valem 0"));
-  L.push("# estado,"+csvv("C_m E_m C_B E_B S T · os seis estados que somam I"));
+  L.push("# col.pontos,"+csvv("itens × peso do resultado; branco, anulado e sem gabarito valem 0"));
+  L.push("# col.estado,"+csvv("C_m E_m C_B E_B S T · os seis estados que somam I"));
   L.push("tipo,confianca,sem_tempo,deixaria_branco,resultado,estado,itens,pontos");
   E.forEach(r=>{
     const p = r.resultado==="acerto" ? pesos[r.tipo].acerto
@@ -1576,7 +1579,10 @@ function gabStr(q){
 }
 function itemStr(it){
   if(it.r===null) return "";
-  if(it.r==="-") return "-";
+  // "-" sozinho e S (enfrentei sem palpite); "-T" e T (nao alcancei). Sem
+  // isso os dois estados saiam identicos na coluna itens e os seis deixavam
+  // de ser reconstruiveis a partir do CSV principal.
+  if(it.r==="-") return it.T ? "-T" : "-";
   return it.r + (it.c||"") + (it.B?"B":"") + (it.T?"T":"");
 }
 function buildCSV(){
@@ -1604,8 +1610,8 @@ function buildCSV(){
   L.push("# conta_digitos,"+eixo(cfgB));
   L.push("# duracao_total,"+(cronometrar?fmt(sessionLive()):""));
   L.push("# olhar,"+csvv(olharList().join(" ")));
-  L.push("# param,"+csvv("tipo A: nº de itens · ME: nº de alternativas · B: nº de dígitos"));
-  L.push("# gabarito,"+csvv("mesmo alfabeto de itens · X = anulada · vazio = sem gabarito"));
+  L.push("# col.param,"+csvv("tipo A: nº de itens · ME: nº de alternativas · B: nº de dígitos"));
+  L.push("# col.gabarito,"+csvv("mesmo alfabeto de itens · X = anulada · vazio = sem gabarito"));
   const tl=tally();
   L.push("# gabarito_visto_em,"+(gabAberto||""));
   L.push("# itens_conferem,"+tl.ok);
@@ -1623,12 +1629,12 @@ function buildCSV(){
     L.push("# "+tp+"_erros,"+sm(r=>erro(r)&&r.tipo===tp));
     L.push("# "+tp+"_brancos,"+sm(r=>r.resultado==="branco"&&r.tipo===tp));
   });
-  L.push("# sem_tempo_itens,"+sm(r=>r.sem_tempo===1));
-  L.push("# sem_tempo_acertos,"+sm(r=>r.sem_tempo===1&&acerto(r)));
-  L.push("# sem_tempo_erros,"+sm(r=>r.sem_tempo===1&&erro(r)));
-  L.push("# sem_tempo_brancos,"+sm(r=>r.sem_tempo===1&&r.resultado==="branco"));
+  // sem_tempo_* deixou de ser emitido: desde que T força branco, os acertos e
+  // erros são sempre 0 e o total é sempre igual à primitiva T.
   const X=indices();
-  L.push("# glossario,"+csvv("real = líquido normalizado contra a prova · item com B rende 0 e tira 0 mas fica no denominador · S = enfrentei sem palpite · T = não alcancei por tempo"));
+  L.push("# n_I,"+X.I);
+  L.push("# n_opinou,"+X.opinou);
+  L.push("# glossario,"+csvv("toda taxa tem o seu n ao lado; 0 com n=1 não é 0 com n=50 · real = líquido normalizado contra a prova · item com B rende 0 e tira 0 mas fica no denominador · S = enfrentei sem palpite · T = não alcancei por tempo"));
   L.push("# identidade,"+csvv("C_m+E_m+C_B+E_B+S+T = I"));
   ["C_m","E_m","C_B","E_B","S","T","I"].forEach(k=>L.push("# "+k+","+X[k]));
   L.push("# identidade_fecha,"+(X.identidade_fecha?1:0));
@@ -1644,10 +1650,10 @@ function buildCSV(){
    ["branco_por_disciplina","política de branco"],
    ["valor_do_branco","a disciplina de branco me paga"],
    ["valor_do_branco_pontos","o mesmo, em pontos — com erro valendo 0 a versão em contagem engana"],
-   ["acerto_certeza","política de chute"],
-   ["acerto_duvida","política de chute"],
-   ["acerto_chute","política de chute"],
-   ["acerto_B_palpite","política de chute"],
+   ["acerto_certeza","política de chute"], ["n_certeza","denominador do índice acima"],
+   ["acerto_duvida","política de chute"],  ["n_duvida","denominador do índice acima"],
+   ["acerto_chute","política de chute"],   ["n_chute","denominador do índice acima"],
+   ["acerto_B_palpite","política de chute"], ["n_B_palpite","denominador do índice acima"],
    ["bruto_ponderado","acerto sem a punição do erro"],
    ["real_ignorando_B","referência: se os B contassem"]]
    .forEach(([k])=>L.push("# "+k+","+(X[k]===null?"":X[k])));
@@ -1661,10 +1667,10 @@ function buildCSV(){
   L.push("# tipos_na_prova,"+csvv(["A","ME","B"].filter(k=>usa[k]).join(" ")));
   L.push("# modelo,"+csvv(ficha.template||"livre"));
   L.push("# estatisticas_completas_em,"+csvv(nomeBase()+"_estatisticas.csv"));
-  L.push("# pag_auto,"+csvv("1 = a pagina veio da ordem das questoes, nao foi conferida"));
+  L.push("# col.pag_auto,"+csvv("1 = a pagina veio da ordem das questoes, nao foi conferida"));
   const ef=pagsEfetivas();
-  L.push("# apelido,"+csvv("nome da questao; sem apelido, e a pagina a que ela se refere"));
-  L.push("# pontos,"+csvv("soma dos pesos dos itens da questão; vazio se ela não tem gabarito"));
+  L.push("# col.apelido,"+csvv("nome da questao; sem apelido, e a pagina a que ela se refere"));
+  L.push("# col.pontos,"+csvv("soma dos pesos dos itens da questão; vazio se ela não tem gabarito"));
   L.push("q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito,pontos");
   for(let q=1;q<=N;q++){
     const a=ans[q]; const t=times[q]||0;

@@ -686,9 +686,18 @@ EQ("e os erros por confianca",
 EQ("segmentado por tipo",
    [val("A_acertos"), val("A_erros"), val("A_brancos"),
     val("ME_acertos"), val("ME_erros"), val("B_acertos")], ["2", "1", "1", "0", "1", "1"]);
-EQ("e o eixo da falta de tempo",
-   [val("sem_tempo_itens"), val("sem_tempo_acertos"),
-    val("sem_tempo_erros"), val("sem_tempo_brancos")], ["2", "1", "1", "0"]);
+// sem_tempo_* deixou de ser emitido: com T forçando branco eles seriam sempre
+// 0, 0 e igual a T. Quem carrega o eixo agora é a primitiva T.
+EQ("sem_tempo_* saiu do bloco por ser redundante",
+   h10.some(l => l.startsWith("# sem_tempo_")), false);
+// aqui os itens tem T junto de resposta, marcados direto no estado: e o caso
+// legado, e a classificacao segue a resposta em vez de descartar o dado
+EQ("T com resposta nao vira T: a resposta manda",
+   [indices().T, indices().C_m + indices().E_m + indices().C_B + indices().E_B], [0, 5]);
+EQ("e o unico branco de verdade vira S, nao T", [indices().S, indices().T], [1, 0]);
+EQ("mas a flag continua na coluna sem_tempo do arquivo de estatisticas",
+   buildEstat().split(String.fromCharCode(10)).filter(l => /^[AB]?ME?,/.test(l))
+     .filter(l => l.split(",")[2] === "1").length > 0, true);
 EQ("o jsonl tambem leva as estatisticas",
    JSON.parse(buildJSONL().split("\n")[0]).estatisticas.length, estatTidy().length);
 

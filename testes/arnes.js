@@ -16,7 +16,12 @@ window.adv = ms => { window.__t += ms; };
 // Sem download real no headless.
 window.__files = [];
 window.__lines = [];
-window.P = (...a) => window.__lines.push(a.join(" "));
+// Escreve a cada linha: se o cenario travar num await, o relatorio mostra
+// ate onde foi em vez de sair vazio.
+window.P = (...a) => { window.__lines.push(a.join(" "));
+  const o=document.getElementById("OUT"); if(o) o.textContent=window.__lines.join(String.fromCharCode(10)); };
+window.addEventListener("unhandledrejection", e =>
+  window.P("PROMESSA REJEITADA: " + (e.reason && (e.reason.stack||e.reason.message) || e.reason)));
 // O headless descarta dialogos, o que responderia "nao" a todo confirm().
 // Aqui o cenario controla a resposta e pode testar os dois lados.
 window.__confirmYes = true;
