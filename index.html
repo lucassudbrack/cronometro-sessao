@@ -117,6 +117,16 @@
   .seg{display:grid; grid-template-columns:repeat(2,1fr); gap:6px}
   .seg button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
   .setup.hide{display:none}
+  /* folha de fechamento: mesma caixa do setup, mas com conteúdo alto o bastante para rolar */
+  .setup.sheet{justify-content:flex-start; gap:10px; padding:14px 14px 20px}
+  .sheet .hint{font-size:10px; line-height:1.45; color:var(--dim); margin:0}
+  .sheet .row2{display:flex; gap:6px; align-items:stretch}
+  .sheet .row2 button{flex:0 0 auto; white-space:nowrap}
+  .ograde{display:grid; gap:5px; grid-template-columns:repeat(auto-fill,minmax(42px,1fr))}
+  .ograde button{padding:9px 0; font-family:var(--mono); font-size:13px; text-transform:none; letter-spacing:0}
+  .ograde button.sel{background:var(--teal); border-color:var(--teal); color:#fff}
+  .endbtns{display:grid; grid-template-columns:auto 1fr; gap:6px; margin-top:4px}
+  .endbtns button{padding:13px 14px}
   .toast{position:fixed; left:50%; bottom:64px; transform:translateX(-50%); background:var(--teal);
     color:#fff; font-size:12px; font-weight:600; padding:8px 14px; border-radius:20px; opacity:0;
     transition:opacity .2s; pointer-events:none; z-index:9}
@@ -163,7 +173,7 @@
   <div class="stat"><span class="eyebrow">Média</span><span class="v" id="avg">—</span></div>
   <span class="warn" id="nopersist" title="O aparelho recusou gravar. Exporte antes de fechar.">sem disco</span>
   <button id="viewBtn">Trilha</button>
-  <button id="expBtn">Exportar</button>
+  <button id="expBtn">Fechar</button>
   <button id="newBtn">Nova</button>
 </div>
 
@@ -193,6 +203,40 @@
   <p id="resumeNote" style="display:none"></p>
 </div>
 
+<div class="setup sheet hide" id="endSheet">
+  <div>
+    <h1>Fechar sessão</h1>
+    <p>O cronômetro está parado. Preencha o olhar antes de abrir o gabarito — depois do gabarito a escolha já está contaminada.</p>
+  </div>
+  <div class="field"><span class="eyebrow">Matéria</span>
+    <input id="mMat" list="vMat" autocomplete="off" placeholder="Estatística"></div>
+  <div class="field"><span class="eyebrow">Subtópico</span>
+    <input id="mSub" list="vSub" autocomplete="off" placeholder="Séries temporais"></div>
+  <div class="field"><span class="eyebrow">Fonte</span>
+    <input id="mFonte" list="vFonte" autocomplete="off" placeholder="ANPEC 2014"></div>
+  <div class="field"><span class="eyebrow">Regime</span>
+    <input id="mRegime" list="vRegime" autocomplete="off"></div>
+  <div class="field"><span class="eyebrow">Tipo de sessão</span>
+    <input id="mTipo" list="vTipo" autocomplete="off"></div>
+  <div class="field"><span class="eyebrow">Itens da prova</span>
+    <div class="row2">
+      <input id="mItens" inputmode="numeric" autocomplete="off" placeholder="—">
+      <button id="mItensCalc">deste set</button>
+    </div>
+    <p class="hint">Julgáveis que existem na prova, brancos incluídos, anulados fora. Fica vazio se você não souber — vazio é dado, chute não é.</p>
+  </div>
+  <div class="field"><span class="eyebrow">Olhar depois</span>
+    <p class="hint">Questões cujo desenvolvimento você quer revisar. Toque nos números.</p>
+    <div class="ograde" id="olharGrid"></div>
+  </div>
+  <div class="endbtns">
+    <button id="endBack">Voltar</button>
+    <button class="primary" id="endExp">Exportar</button>
+  </div>
+  <datalist id="vMat"></datalist><datalist id="vSub"></datalist><datalist id="vFonte"></datalist>
+  <datalist id="vRegime"></datalist><datalist id="vTipo"></datalist>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -210,7 +254,12 @@ let times={}, log=[], visit=null, ans={}, events=[];
 // pags vive fora de ans de propósito: a página do caderno é fato físico da sessão,
 // não parte da resposta. Trocar o tipo da questão zera ans[q] e não pode levar a página junto.
 let pags={};
+// ficha = metadados da sessão, preenchidos no fechamento. olhar = questões a revisar,
+// marcadas antes do gabarito.
+const fichaVazia=()=>({mat:"",sub:"",fonte:"",regime:"",tipo:"",itens:""});
+let ficha=fichaVazia(), olhar={};
 let running=false, segStart=null, sessionAccum=0, sessionStart=null, started=false, curQ=null;
+let exported=false, pending=null;
 
 const now=()=>performance.now();
 function fmt(s){ if(s==null||isNaN(s)) return "—";
@@ -228,7 +277,7 @@ const sec1 = x => Math.round(x*10)/10;   // o log guarda décimos; o CSV arredon
 
 // Todo evento discreto grava na hora. O jsonl é o lastro: se o app morrer,
 // o log tem que estar em disco até o último toque, não até o último debounce.
-function ev(o){ events.push(Object.assign({t:iso(Date.now())},o)); saveNow(); }
+function ev(o){ events.push(Object.assign({t:iso(Date.now())},o)); exported=false; saveNow(); }
 
 function blankAns(tipo){
   if(tipo==="A")  return {tipo:"A",  itens:Array.from({length:nItens},()=>({r:null,c:null,B:false,T:false}))};
@@ -491,7 +540,7 @@ function snapshot(){
       vis.sec+=d; t[visit.q]=(t[visit.q]||0)+d;
     }
   }
-  return {fmt:1,N,goal,nItens,nAlt,tag,times:t,log,visit:vis,ans,pags,events,
+  return {fmt:1,N,goal,nItens,nAlt,tag,times:t,log,visit:vis,ans,pags,ficha,olhar,events,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -519,7 +568,71 @@ setInterval(()=>{ if(running) saveNow(); }, 5000);
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) saveNow(); });
 window.addEventListener("pagehide",saveNow);
 
+/* ---------- folha de fechamento ---------- */
+const FICHA=[["mat","mMat","vMat"],["sub","mSub","vSub"],["fonte","mFonte","vFonte"],
+             ["regime","mRegime","vRegime"],["tipo","mTipo","vTipo"]];
+// O vocabulário mora fora da sessão: sobrevive a "Nova" e vira autocompletar
+// a partir da segunda sessão, sem eu ter que adivinhar o seu vocabulário.
+const VKEY="sessao:vocab:v1";
+let vocab={};
+async function loadVocab(){ if(!store) return;
+  try{ vocab=JSON.parse((await store.get(VKEY)).value)||{}; }catch(e){ vocab={}; } }
+function learnVocab(){
+  FICHA.forEach(([k])=>{
+    const v=(ficha[k]||"").trim(); if(!v) return;
+    const l=(vocab[k]||[]).filter(x=>x.toLowerCase()!==v.toLowerCase());
+    l.unshift(v); vocab[k]=l.slice(0,40);
+  });
+  if(store) store.set(VKEY, JSON.stringify(vocab)).catch(()=>{});
+}
+function paintVocab(){
+  FICHA.forEach(([k,,dl])=>{
+    $(dl).innerHTML=(vocab[k]||[]).map(v=>'<option value="'+
+      v.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;")+'">').join("");
+  });
+}
+// Julgáveis declarados neste set. Questão sem tipo escolhido não conta —
+// o app não sabe quantos itens ela tem e não vai supor.
+function itensDoSet(){
+  let n=0;
+  for(let q=1;q<=N;q++){ const a=ans[q]; if(!a) continue; n += a.tipo==="A" ? a.itens.length : 1; }
+  return n;
+}
+function paintOlhar(){
+  const g=$("olharGrid"); g.innerHTML="";
+  for(let i=1;i<=N;i++){
+    const b=document.createElement("button");
+    b.textContent=i; b.className=olhar[i]?"sel":"";
+    b.onclick=()=>{ if(olhar[i]) delete olhar[i]; else olhar[i]=true;
+      ev({ev:"olhar",q:i,on:!!olhar[i]}); paintOlhar(); };
+    g.appendChild(b);
+  }
+}
+function openEnd(){
+  setRunning(false);                       // fechamento não é tempo de prova
+  FICHA.forEach(([k,el])=>$(el).value=ficha[k]||"");
+  $("mItens").value=ficha.itens||"";
+  $("mItensCalc").textContent="deste set ("+itensDoSet()+")";
+  paintVocab(); paintOlhar();
+  $("endSheet").classList.remove("hide");
+  $("endSheet").scrollTop=0;
+}
+function closeEnd(){ $("endSheet").classList.add("hide"); }
+FICHA.forEach(([k,el])=>{
+  $(el).addEventListener("input", e=>{ ficha[k]=e.target.value; save(); });
+  $(el).addEventListener("change", e=>{ ficha[k]=e.target.value.trim(); e.target.value=ficha[k];
+    ev({ev:"ficha",campo:k,valor:ficha[k]}); });
+});
+$("mItens").addEventListener("input", e=>{ ficha.itens=e.target.value.replace(/\D/g,""); save(); });
+$("mItens").addEventListener("change", e=>{ e.target.value=ficha.itens;
+  ev({ev:"ficha",campo:"itens",valor:ficha.itens}); });
+$("mItensCalc").onclick=()=>{ ficha.itens=String(itensDoSet()); $("mItens").value=ficha.itens;
+  ev({ev:"ficha",campo:"itens",valor:ficha.itens,de:"contagem do set"}); };
+$("endBack").onclick=closeEnd;
+
 /* ---------- export ---------- */
+const csvv = s => { s=String(s==null?"":s); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+const olharList = () => Object.keys(olhar).filter(q=>olhar[q]).map(Number).sort((a,b)=>a-b);
 function itemStr(it){
   if(it.r===null) return "";
   if(it.r==="-") return "-";
@@ -527,23 +640,34 @@ function itemStr(it){
 }
 function buildCSV(){
   commit(); if(running) segStart=now();
+  // Bloco de metadados só em linhas de comentário. Antes havia um cabeçalho
+  // "chave,valor" falso antes delas e o arquivo tinha dois headers — nenhum
+  // parser lia isso direto, e o destino do CSV é justamente ser lido por máquina.
   const L=[];
-  L.push("chave,valor");
-  L.push("# sessao,"+new Date().toISOString().slice(0,10));
-  L.push("# rotulo,"+(tag||""));
-  L.push("# questoes,"+N);
+  L.push("# gerado_por,app sessao v1");
+  L.push("# exportado_em,"+iso(Date.now()));
+  L.push("# rotulo,"+csvv(tag));
+  L.push("# materia,"+csvv(ficha.mat));
+  L.push("# subtopico,"+csvv(ficha.sub));
+  L.push("# fonte,"+csvv(ficha.fonte));
+  L.push("# regime,"+csvv(ficha.regime));
+  L.push("# tipo_sessao,"+csvv(ficha.tipo));
+  L.push("# itens_da_prova,"+csvv(ficha.itens));
+  L.push("# questoes_no_set,"+N);
+  L.push("# itens_julgaveis_no_set,"+itensDoSet());
   L.push("# itens_ce_por_questao,"+nItens);
   L.push("# alternativas_me,"+nAlt);
   L.push("# duracao_total,"+fmt(sessionLive()));
-  L.push("# gerado_por,app sessao v1");
-  L.push("q,tipo,itens,numerica,segundos,mmss,passadas,pag");
+  L.push("# olhar,"+csvv(olharList().join(" ")));
+  L.push("q,tipo,itens,numerica,segundos,mmss,passadas,pag,olhar");
   for(let q=1;q<=N;q++){
     const a=ans[q]; const t=times[q]||0;
-    if(!a && !t && !pags[q]) continue;
+    if(!a && !t && !pags[q] && !olhar[q]) continue;
     const tipo=a?a.tipo:"";
     const itens = a && a.tipo!=="B" ? a.itens.map(itemStr).join(" ").trim() : (a?itemStr(a.itens[0]).replace(/^[0-9]+/,""):"");
     const num = a && a.tipo==="B" ? (a.num||(a.itens[0].r==="-"?"-":"")) : "";
-    L.push([q,tipo,'"'+itens+'"',num,Math.round(t),fmt(t),passes(q),'"'+(pags[q]||"")+'"'].join(","));
+    L.push([q,tipo,'"'+itens+'"',num,Math.round(t),fmt(t),passes(q),
+            csvv(pags[q]||""),olhar[q]?1:""].join(","));
   }
   return L.join("\n");
 }
@@ -554,7 +678,11 @@ function buildJSONL(){
                               truncada:v.trunc?true:undefined}))
                 .concat(events)
                 .sort((a,b)=> a.t<b.t?-1 : a.t>b.t?1 : 0);   // append-only de verdade: em ordem
-  const meta={t:iso(Date.now()),ev:"meta",rotulo:tag,questoes:N,itens_ce:nItens,alternativas_me:nAlt};
+  const meta={t:iso(Date.now()),ev:"meta",rotulo:tag,questoes:N,itens_ce:nItens,alternativas_me:nAlt,
+    materia:ficha.mat||null, subtopico:ficha.sub||null, fonte:ficha.fonte||null,
+    regime:ficha.regime||null, tipo_sessao:ficha.tipo||null,
+    itens_da_prova:ficha.itens?+ficha.itens:null, itens_julgaveis_no_set:itensDoSet(),
+    olhar:olharList(), pags:Object.assign({},pags)};
   return [meta].concat(rows).map(o=>JSON.stringify(o)).join("\n");
 }
 function dl(name,txt,mime){
@@ -562,12 +690,19 @@ function dl(name,txt,mime){
   a.href=URL.createObjectURL(new Blob([txt],{type:mime}));
   a.download=name; a.click();
 }
-$("expBtn").onclick=()=>{
-  const stamp=new Date().toISOString().slice(0,16).replace(/[:T]/g,"");
-  dl("sessao-"+stamp+".csv","\ufeff"+buildCSV(),"text/csv");
-  setTimeout(()=>dl("eventos-"+stamp+".jsonl",buildJSONL(),"application/x-ndjson"),350);
+const slug = s => (s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  .toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,32);
+function doExport(){
+  learnVocab();
+  const base=[new Date().toISOString().slice(0,16).replace(/[:T]/g,""),
+              slug(ficha.fonte||tag), slug(ficha.mat)].filter(Boolean).join("-");
+  dl("sessao-"+base+".csv","\ufeff"+buildCSV(),"text/csv");
+  setTimeout(()=>dl("eventos-"+base+".jsonl",buildJSONL(),"application/x-ndjson"),350);
+  exported=true;
   toast("CSV + trilha exportados");
-};
+}
+$("expBtn").onclick=openEnd;
+$("endExp").onclick=doExport;
 let tt;
 function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("on"); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove("on"),1500); }
 
@@ -582,8 +717,16 @@ document.querySelectorAll("#typeRow button").forEach(b=>b.onclick=()=>{
   if(ans[curQ] && ans[curQ].tipo!==t && !confirm("Trocar o tipo apaga as marcações desta questão. Continuar?")) return;
   ans[curQ]=blankAns(t); ev({ev:"tipo",q:curQ,tipo:t}); renderQ(); paint(); save();
 });
-$("newBtn").onclick=()=>{ if(started && !confirm("Encerrar esta sessão e começar outra?")) return;
-  setRunning(false); $("setup").classList.remove("hide"); started=false; };
+// Só existe um slot de storage: começar outra sessão apaga esta. Se ela ainda
+// não foi exportada, o aviso precisa dizer isso com todas as letras.
+function podeDescartar(){
+  if(!started) return true;
+  return confirm(exported
+    ? "Encerrar esta sessão e começar outra?"
+    : "Esta sessão NÃO foi exportada e não há como recuperá-la depois. Descartar mesmo assim?");
+}
+$("newBtn").onclick=()=>{ if(!podeDescartar()) return;
+  setRunning(false); closeEnd(); $("setup").classList.remove("hide"); started=false; };
 
 function seg(id,cur,cb){
   document.querySelectorAll("#"+id+" button").forEach(b=>{
@@ -597,13 +740,16 @@ seg("segAlt",5,v=>nAlt=v);
 $("startBtn").onclick=()=>{
   const n=parseInt($("nIn").value,10);
   if(!n||n<1||n>300){ $("nIn").focus(); return; }
+  if(pending && !confirm("Há uma sessão guardada que será apagada. Começar do zero mesmo assim?")) return;
+  pending=null;
   const g=parseFloat(String($("goalIn").value).replace(",","."));
   N=n; goal = g>0 ? g*60 : 0; tag=$("tagIn").value.trim();
   times={}; log=[]; visit=null; ans={}; pags={}; events=[]; sessionAccum=0; sessionStart=null; running=false;
+  ficha=fichaVazia(); olhar={}; curQ=null;
   document.body.classList.remove("running","paused"); $("toggle").textContent="Pausar";
   started=true; ev({ev:"start",questoes:N,itens_ce:nItens,alternativas_me:nAlt,rotulo:tag});
   buildGrid(); paint(); save(); showPane("paneGrid");
-  $("setup").classList.add("hide");
+  closeEnd(); $("setup").classList.add("hide");
 };
 
 document.addEventListener("keydown",e=>{
@@ -615,8 +761,10 @@ document.addEventListener("keydown",e=>{
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && running) wake(); });
 
 (async()=>{
+  await loadVocab();
   const prev=await restore();
   if(prev && (Object.keys(prev.times||{}).length || (prev.log&&prev.log.length))){
+    pending=prev;
     const when=new Date(prev.ts||Date.now()).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
     const note=$("resumeNote");
     const aberta = prev.visit && prev.running
@@ -630,10 +778,10 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden && runnin
     if(prev.goal) $("goalIn").value=prev.goal/60;
     if(prev.tag) $("tagIn").value=prev.tag;
     $("resumeLink").onclick=e=>{
-      e.preventDefault();
+      e.preventDefault(); pending=null;
       N=prev.N; goal=prev.goal||0; nItens=prev.nItens||5; nAlt=prev.nAlt||5; tag=prev.tag||"";
       times=prev.times||{}; log=prev.log||[]; ans=prev.ans||{}; events=prev.events||[];
-      pags=prev.pags||{};
+      pags=prev.pags||{}; ficha=Object.assign(fichaVazia(),prev.ficha||{}); olhar=prev.olhar||{};
       if(prev.visit){
         // A passada que estava aberta virou passada fechada, com o valor medido até
         // o último registro. trunc diz que esse número é piso, não medida completa.
