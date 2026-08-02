@@ -102,6 +102,48 @@ seu ao ser aberta. O tipo nunca é decidido no setup.
 - **Olhar depois se marca antes do gabarito.** O app registra o instante em que
   você abriu o gabarito e carimba `pos_gabarito` no que for marcado depois.
 
+## Índices
+
+Todo item válido termina em **exatamente um** de seis estados, e eles somam I.
+A identidade é auto-auditável: se não fechar, há item sem destino.
+
+| estado | significado |
+|---|---|
+| `C_m` | marquei e acertei |
+| `E_m` | marquei e errei |
+| `C_B` | declarei que deixaria em branco, e o palpite acertou |
+| `E_B` | declarei que deixaria em branco, e o palpite errou |
+| `S` | enfrentei e não tive nem palpite |
+| `T` | não alcancei por tempo |
+
+    C_m + E_m + C_B + E_B + S + T = I      (anulado e sem gabarito fora)
+
+**Item marcado B rende 0 e tira 0, mas continua no denominador** — ele estava
+em jogo e você não o levou. É isso que normaliza o índice contra a prova, e não
+contra o que você resolveu enfrentar.
+
+| decisão que dirige | índice | fórmula |
+|---|---|---|
+| projeção de nota, tendência | **real** (master) | pontos líquidos ÷ pontos em jogo |
+| onde meu modelo falha | acerto do enfrentado | (C_m+C_B) ÷ (C_m+E_m+C_B+E_B) |
+| pacing | branco por tempo | T ÷ I |
+| cobertura | branco por conceito | S ÷ I |
+| política de branco | branco por disciplina | (C_B+E_B) ÷ I |
+| a disciplina me paga? | valor do branco | (E_B−C_B) ÷ I |
+| política de chute | acerto por certeza / dúvida / chute / B-palpite | fórmula, não input |
+| qualidade do dado | min por questão · % passadas truncadas | |
+
+**real** é a versão ponderada de `(C_m − E_m) / I`: com peso +1 no acerto e −1
+no erro devolve exatamente essa fração, e com os pesos da ANPEC (conta vale +5
+e erra 0) continua dizendo a verdade, o que a fração crua não faria. Pelo mesmo
+motivo sai também `valor_do_branco_pontos`: quando o erro não pune, a versão em
+contagem diz que a disciplina é neutra, e ela custou o acerto que você abriu mão.
+
+**T bloqueia a marcação** do item e o torna branco automaticamente. T não é um
+jeito de responder — é a declaração de que você não chegou lá. Sem esse
+bloqueio, T e resposta coexistiriam e os seis estados deixariam de ser
+mutuamente exclusivos.
+
 ## Saída
 
 Três arquivos. O primário é o último.
