@@ -1,8 +1,14 @@
 /* ---- cenário 1: tempo acumulado com revisita ---- */
 $("nIn").value = "4";
 $("goalIn").value = "2";
-$("tagIn").value = "teste, com virgula";
+$("mData").value = "2026-08-02"; $("mData").dispatchEvent(new Event("change"));
+$("mConc").value = "ANPEC"; $("mConc").dispatchEvent(new Event("change"));
+$("mMat").value = "Estatística"; $("mMat").dispatchEvent(new Event("change"));
+$("mFonte").value = "PDF, misto"; $("mFonte").dispatchEvent(new Event("change"));
+EQ("nome padronizado da sessao", nomeBase(), "20260802_anpec_estatistica_prova_pdf_misto");
+EQ("prova corre no relogio", cronometrar, true);
 $("startBtn").click();
+EQ("comecar nao apaga a identificacao", [ficha.concurso, ficha.mat], ["ANPEC", "PDF, misto"].slice(0,1).concat(["Estatística"]));
 EQ("sessao iniciou", started, true);
 
 select(1);            adv(60000);     // 60 s na Q1
@@ -82,8 +88,8 @@ EQ("com a Q3 no default e a Q4 digitada", efv(), ["1", "2", "3", "7-8"]);
 $("expBtn").click();
 EQ("fechar para o cronometro", running, false);
 EQ("folha de fechamento abriu", $("endSheet").classList.contains("hide"), false);
-$("mMat").value = "Estatística"; $("mMat").dispatchEvent(new Event("change"));
-$("mFonte").value = "ANPEC 2014"; $("mFonte").dispatchEvent(new Event("change"));
+EQ("o fechamento mostra a identificacao pronta",
+   $("identResumo").textContent, "20260802_anpec_estatistica_prova_pdf_misto");
 $("mItensCalc").click();
 EQ("itens do set = 5 (tipo A) + 1 (tipo B)", ficha.itens, "6");
 $("olharGrid").children[0].click();
@@ -161,8 +167,11 @@ const rows = csv.slice(csv.indexOf(cols) + 1);
 EQ("um unico cabecalho de colunas", csv.filter(l => l.startsWith("q,tipo")).length, 1);
 EQ("nenhuma linha antes do bloco de comentario", csv[0].startsWith("#"), true);
 EQ("colunas", cols, "q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito");
-EQ("rotulo com virgula fica citado",
-   head.find(l => l.startsWith("# rotulo")), '# rotulo,"teste, com virgula"');
+EQ("valor com virgula fica citado",
+   head.find(l => l.startsWith("# fonte")), '# fonte,"PDF, misto"');
+EQ("o bloco abre pelo nome da sessao",
+   head.find(l => l.startsWith("# sessao")), "# sessao,20260802_anpec_estatistica_prova_pdf_misto");
+EQ("e diz que foi cronometrada", head.find(l => l.startsWith("# cronometrada")), "# cronometrada,1");
 EQ("materia no bloco", head.find(l => l.startsWith("# materia")), "# materia,Estatística");
 EQ("linha da Q1", rows[0], '1,A,5,"Vc F? V - FxB",,90,01:30,3,1,1,1,""');
 EQ("linha da Q2 tipo B", rows[1], '2,B,3,"?",042,30,00:30,1,2,1,,""');
@@ -426,6 +435,49 @@ EQ("bloco registra quando o gabarito foi visto",
 const jl6 = buildJSONL().split("\n").map(JSON.parse);
 EQ("meta leva o gabarito inteiro", jl6[0].gabarito[1].itens, ["V", "X", "F"]);
 EQ("meta leva a contagem", jl6[0].conferencia.ok, 2);
+
+/* ---- cenário 7: sessão de aprendizado não corre no relógio ---- */
+const clicaTipo = v => document.querySelector('#segTipo button[data-v="' + v + '"]').click();
+clicaTipo("aprendizado");
+EQ("aprendizado desliga o cronometro", cronometrar, false);
+EQ("e o corpo marca isso pro CSS", document.body.classList.contains("semcrono"), true);
+$("mData").value = "2026-08-02"; $("mData").dispatchEvent(new Event("change"));
+$("mConc").value = "BACEN"; $("mConc").dispatchEvent(new Event("change"));
+$("mMat").value = "Matemática"; $("mMat").dispatchEvent(new Event("change"));
+$("mFonte").value = "Questões comentadas"; $("mFonte").dispatchEvent(new Event("change"));
+EQ("o tipo entra no nome", nomeBase(),
+   "20260802_bacen_matematica_aprendizado_questoes_comentadas");
+cfgA = 2; cfgME = 5; cfgB = 2; pintaEixos();
+$("nIn").value = "3"; $("startBtn").click();
+
+select(1); adv(300000);          // cinco minutos de relógio de parede
+EQ("o relogio nao liga", running, false);
+EQ("nenhum tempo foi registrado", times[1], undefined);
+EQ("mas a passada existe", passes(1), 1);
+select(2); adv(120000);
+EQ("a trilha registra a navegacao", log.length, 1);
+EQ("e nada de tempo na sessao", sessionLive(), 0);
+EQ("setRunning nao consegue ligar a forca", (setRunning(true), running), false);
+
+document.querySelector('#typeRow button[data-t="A"]').click();
+[...document.querySelectorAll("#answerArea .item")][0].querySelectorAll(".opts button")[0].click();
+EQ("marcar continua funcionando", itemStr(ans[2].itens[0]), "Vc");
+EQ("a conferencia nao cobra tempo em sessao sem relogio",
+   pendencias().some(p => /tempo/.test(p.txt)), false);
+
+const csv7 = buildCSV().split("\n");
+const h7 = csv7.filter(l => l.startsWith("#"));
+const c7 = csv7.find(l => l.startsWith("q,tipo"));
+const r7 = csv7.slice(csv7.indexOf(c7) + 1);
+EQ("o bloco diz que nao foi cronometrada",
+   h7.find(l => l.startsWith("# cronometrada")), "# cronometrada,0");
+EQ("duracao total sai vazia", h7.find(l => l.startsWith("# duracao_total")), "# duracao_total,");
+EQ("segundos e mmss saem vazios, nao zero",
+   r7.map(l => { const p = l.split(","); return p[5] + "|" + p[6]; }), ["|", "|"]);
+EQ("mas as passadas continuam saindo",
+   r7.map(l => l.split(",")[7]), ["1", "1"]);
+EQ("o jsonl marca a sessao como nao cronometrada",
+   JSON.parse(buildJSONL().split("\n")[0]).cronometrada, false);
 
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +

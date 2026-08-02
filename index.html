@@ -176,6 +176,14 @@
   .setup.hide{display:none}
   /* folha de fechamento: mesma caixa do setup, mas com conteúdo alto o bastante para rolar */
   .setup.sheet{justify-content:flex-start; gap:10px; padding:14px 14px 20px}
+  .setup.editando .soNova{display:none}
+  body.semcrono .cronoOnly{display:none}
+  .seg3{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
+  .seg3 button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
+  .ident{flex:1; min-width:0; font-family:var(--mono); font-size:11px; line-height:1.5;
+    color:var(--paper); background:var(--sunken); border:1px solid var(--line);
+    border-radius:3px; padding:8px; word-break:break-all}
+  .ident.vazio{color:var(--dim)}
   .sheet .hint{font-size:10px; line-height:1.45; color:var(--dim); margin:0}
   .sheet .row2{display:flex; gap:6px; align-items:stretch}
   .sheet .row2 button{flex:0 0 auto; white-space:nowrap}
@@ -278,29 +286,51 @@
   <button id="newBtn">Nova</button>
 </div>
 
-<div class="setup" id="setup">
+<div class="setup sheet" id="setup">
   <div>
-    <h1>Sessão cronometrada</h1>
+    <h1>Nova sessão</h1>
     <p>Toque no número da questão que está resolvendo — o relógio da anterior para no mesmo instante. Marque a resposta ali mesmo.</p>
   </div>
-  <div class="field"><span class="eyebrow">Quantas questões</span><input id="nIn" value="15" inputmode="numeric"></div>
   <div class="field">
+    <span class="eyebrow">Tipo de sessão</span>
+    <div class="seg3" id="segTipo">
+      <button data-v="prova">Prova</button>
+      <button data-v="teste">Teste</button>
+      <button data-v="aprendizado">Aprendizado</button>
+    </div>
+    <p class="hint" id="tipoHint"></p>
+  </div>
+  <div class="row2">
+    <div class="field" style="flex:1">
+      <span class="eyebrow">Data</span><input id="mData" type="date"></div>
+    <div class="field soNova" style="flex:0 0 96px">
+      <span class="eyebrow">Questões</span><input id="nIn" value="15" inputmode="numeric"></div>
+  </div>
+  <div class="field"><span class="eyebrow">Concurso</span>
+    <input id="mConc" list="vConc" autocomplete="off" placeholder="ANPEC"></div>
+  <div class="field"><span class="eyebrow">Matéria</span>
+    <input id="mMat" list="vMat" autocomplete="off" placeholder="Estatística"></div>
+  <div class="field"><span class="eyebrow">Subtópico</span>
+    <input id="mSub" list="vSub" autocomplete="off" placeholder="Séries temporais"></div>
+  <div class="field"><span class="eyebrow">Fonte</span>
+    <input id="mFonte" list="vFonte" autocomplete="off" placeholder="PDF Estratégia"></div>
+  <p class="hint" id="nomePrev"></p>
+  <div class="field soNova">
     <span class="eyebrow">C / E — itens por questão</span>
     <div class="numseg" id="segA"></div>
   </div>
-  <div class="field">
+  <div class="field soNova">
     <span class="eyebrow">Múltipla — alternativas</span>
     <div class="numseg" id="segME"></div>
   </div>
-  <div class="field">
+  <div class="field soNova">
     <span class="eyebrow">Conta — dígitos</span>
     <div class="numseg" id="segB"></div>
   </div>
-  <p style="margin:-4px 0 0;font-size:10px;line-height:1.45;color:var(--dim)">
+  <p class="soNova" style="margin:-4px 0 0;font-size:10px;line-height:1.45;color:var(--dim)">
     <b style="color:var(--mute)">na hora</b> deixa o eixo em aberto: você escolhe questão a questão,
     ao abrir cada uma. O tipo da questão é sempre escolhido na hora.</p>
-  <div class="field"><span class="eyebrow">Meta por questão (min) — opcional</span><input id="goalIn" placeholder="4" inputmode="decimal"></div>
-  <div class="field"><span class="eyebrow">Rótulo da sessão — opcional</span><input id="tagIn" placeholder="Estatistica · Series · ANPEC 2014"></div>
+  <div class="field soNova cronoOnly"><span class="eyebrow">Meta por questão (min) — opcional</span><input id="goalIn" placeholder="4" inputmode="decimal"></div>
   <button class="primary" id="startBtn" style="padding:13px">Começar</button>
   <p id="resumeNote" style="display:none"></p>
 </div>
@@ -310,16 +340,13 @@
     <h1>Fechar sessão</h1>
     <p>O cronômetro está parado. Preencha o olhar antes de abrir o gabarito — depois do gabarito a escolha já está contaminada.</p>
   </div>
-  <div class="field"><span class="eyebrow">Matéria</span>
-    <input id="mMat" list="vMat" autocomplete="off" placeholder="Estatística"></div>
-  <div class="field"><span class="eyebrow">Subtópico</span>
-    <input id="mSub" list="vSub" autocomplete="off" placeholder="Séries temporais"></div>
-  <div class="field"><span class="eyebrow">Fonte</span>
-    <input id="mFonte" list="vFonte" autocomplete="off" placeholder="ANPEC 2014"></div>
-  <div class="field"><span class="eyebrow">Regime</span>
-    <input id="mRegime" list="vRegime" autocomplete="off"></div>
-  <div class="field"><span class="eyebrow">Tipo de sessão</span>
-    <input id="mTipo" list="vTipo" autocomplete="off"></div>
+  <div class="field">
+    <span class="eyebrow">Identificação</span>
+    <div class="row2">
+      <div class="ident" id="identResumo"></div>
+      <button id="identEdit">Editar</button>
+    </div>
+  </div>
   <div class="field"><span class="eyebrow">Itens da prova</span>
     <div class="row2">
       <input id="mItens" inputmode="numeric" autocomplete="off" placeholder="—">
@@ -337,9 +364,10 @@
     <button id="endGab">Gabarito</button>
   </div>
   <button class="primary" id="endExp" style="padding:14px">Exportar</button>
-  <datalist id="vMat"></datalist><datalist id="vSub"></datalist><datalist id="vFonte"></datalist>
-  <datalist id="vRegime"></datalist><datalist id="vTipo"></datalist>
 </div>
+
+<datalist id="vMat"></datalist><datalist id="vSub"></datalist>
+<datalist id="vFonte"></datalist><datalist id="vConc"></datalist>
 
 <div class="toast" id="toast"></div>
 
@@ -353,7 +381,7 @@ const store = (typeof window!=="undefined" && window.storage) ? window.storage :
   }catch(e){ return null; }
 })();
 
-let N=15, goal=0, tag="";
+let N=15, goal=0;
 // Três eixos de formato. Cada um vale para a sessão inteira OU fica em aberto
 // (valor 0 = "na hora"), e aí cada questão declara o seu ao ser aberta.
 // O tipo da questão nunca é decidido no setup — só se descobre lendo.
@@ -365,8 +393,17 @@ let times={}, log=[], visit=null, ans={}, events=[];
 let pags={};
 // ficha = metadados da sessão, preenchidos no fechamento. olhar = questões a revisar,
 // marcadas antes do gabarito.
-const fichaVazia=()=>({mat:"",sub:"",fonte:"",regime:"",tipo:"",itens:""});
+// Identificação da sessão, preenchida antes de começar. Sem "regime" e sem
+// "tipo de prova": o primeiro não é usado e o segundo já está implícito no tipo
+// de cada questão. É esta ficha que dá nome ao arquivo e à sessão guardada.
+const hojeISO = () => { const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const fichaVazia=()=>({data:hojeISO(),concurso:"",mat:"",sub:"",fonte:"",tipo:"prova",itens:""});
 let ficha=fichaVazia(), olhar={};
+// Prova e teste correm no relógio; aprendizado não precisa. Quando não corre,
+// tempo não é registrado e sai vazio — zero seria mentira, vazio é dado ausente.
+let cronometrar=true;
+const TIPOS={prova:true, teste:true, aprendizado:false};
 // Gabarito da prova, preenchido no fim. gabAberto guarda o instante em que
 // você viu o gabarito pela primeira vez: é a linha que separa escolha limpa de
 // escolha contaminada, e o que vier de olhar depois dela sai carimbado.
@@ -422,6 +459,7 @@ function commit(){ if(segStart===null) return;
   segStart=null; }
 
 function setRunning(on){
+  if(on && !cronometrar) return;
   if(on===running) return;
   if(on){ running=true; segStart=now(); sessionStart=now(); wake(); ev({ev:"resume", q:visit?visit.q:null}); }
   else{ commit(); if(sessionStart!==null){ sessionAccum+=(now()-sessionStart)/1000; sessionStart=null; }
@@ -445,7 +483,9 @@ function select(q, keepPane){
   ev({ev:"enter", q:q, passada:passes(q)});
   // Religar o cronômetro passa por setRunning e só por ele — um caminho paralelo
   // aqui já deixou o log com pause sem resume correspondente.
-  if(running) segStart=now(); else setRunning(true);
+  // Em sessão de aprendizado o relógio simplesmente não corre: as passadas e as
+  // marcações continuam sendo registradas, o tempo é que não existe.
+  if(cronometrar){ if(running) segStart=now(); else setRunning(true); }
   if(!keepPane) openQ(q);
   paint(); saveNow();
 }
@@ -715,6 +755,11 @@ function paintLog(){
   el.scrollTop=el.scrollHeight;
 }
 function tick(){
+  if(!cronometrar){
+    $("clock").textContent="sem relógio";
+    $("total").textContent="—"; $("avg").textContent="—";
+    requestAnimationFrame(tick); return;
+  }
   const v=visitLive();
   $("clock").innerHTML = fmt(v).replace(":",'<span class="colon">:</span>')+'<span class="dec">.'+Math.floor((v%1)*10)+'</span>';
   $("total").textContent = fmt(sessionLive());
@@ -742,7 +787,7 @@ function snapshot(){
       vis.sec+=d; t[visit.q]=(t[visit.q]||0)+d;
     }
   }
-  return {fmt:2,N,goal,cfgA,cfgME,cfgB,tag,times:t,log,visit:vis,ans,pags,ficha,olhar,gab,gabAberto,events,
+  return {fmt:3,N,goal,cfgA,cfgME,cfgB,cronometrar,times:t,log,visit:vis,ans,pags,ficha,olhar,gab,gabAberto,events,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -768,7 +813,8 @@ async function restore(){ if(!store) return null;
 // errado, o prejuízo é uma sessão de estudo, e só se descobre já perdida.
 function retomar(prev){
   pending=null;
-  N=prev.N; goal=prev.goal||0; tag=prev.tag||"";
+  N=prev.N; goal=prev.goal||0;
+  cronometrar = prev.cronometrar!==undefined ? prev.cronometrar : true;
   // fmt 1 guardava nItens/nAlt globais e questões sem alt/dig próprios.
   cfgA  = prev.cfgA  !== undefined ? prev.cfgA  : (prev.nItens || 5);
   cfgME = prev.cfgME !== undefined ? prev.cfgME : (prev.nAlt   || 5);
@@ -780,6 +826,7 @@ function retomar(prev){
     if(a.tipo==="B"  && a.dig===undefined) a.dig=3;
   });
   pags=prev.pags||{}; ficha=Object.assign(fichaVazia(),prev.ficha||{}); olhar=prev.olhar||{};
+  if(!TIPOS.hasOwnProperty(ficha.tipo)) ficha.tipo="prova";   // fmt<3 guardava texto livre
   gab=prev.gab||{}; gabAberto=prev.gabAberto||null;
   if(prev.visit){
     // A passada que estava aberta vira passada fechada, valendo o que foi medido
@@ -791,7 +838,7 @@ function retomar(prev){
       truncada:!!v.trunc, obs:"tempo entre o último registro e a retomada não foi medido"});
   }
   visit=null; sessionAccum=prev.sessionAccum||0; sessionStart=null; running=false;
-  started=true; exported=false; curQ=null; sairRev();
+  started=true; exported=false; curQ=null; sairRev(); pintaTipo(); pintaNome();
   buildGrid(); paint(); showPane("paneGrid"); closeEnd(); $("setup").classList.add("hide"); saveNow();
 }
 
@@ -985,7 +1032,7 @@ function pendencias(){
       if(!(a.num&&a.num.length) && a.itens[0].r!=="-") add(q,"falta","sem número e sem branco");
       else if(a.itens[0].r!=="-" && !a.itens[0].c) add(q,"falta","sem confiança");
     }
-    if(a && t===0) add(q,"aviso","marcada sem tempo registrado");
+    if(cronometrar && a && t===0) add(q,"aviso","marcada sem tempo registrado");
 
     if(log.some(v=>v.q===q&&v.trunc)) add(q,"aviso","tempo truncado por crash — é piso, não medida");
   }
@@ -1057,8 +1104,36 @@ $("endRev").onclick=openRev;
 $("revBack").onclick=()=>{ sairRev(); openEnd(); };
 
 /* ---------- folha de fechamento ---------- */
-const FICHA=[["mat","mMat","vMat"],["sub","mSub","vSub"],["fonte","mFonte","vFonte"],
-             ["regime","mRegime","vRegime"],["tipo","mTipo","vTipo"]];
+const FICHA=[["concurso","mConc","vConc"],["mat","mMat","vMat"],
+             ["sub","mSub","vSub"],["fonte","mFonte","vFonte"]];
+// Nome único da sessão: serve de nome de arquivo e de apelido na lista.
+// aaaammdd_concurso_materia_tiposessao_fonte, tudo minúsculo, sem acento.
+const sluglow = s => (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"")
+  .toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
+function nomeBase(){
+  const d=(ficha.data||hojeISO()).replace(/-/g,"");
+  return [d, ficha.concurso, ficha.mat, ficha.tipo, ficha.fonte]
+    .map(sluglow).filter(Boolean).join("_");
+}
+function pintaTipo(){
+  document.querySelectorAll("#segTipo button").forEach(b=>
+    b.classList.toggle("sel", b.dataset.v===ficha.tipo));
+  document.body.classList.toggle("semcrono", !cronometrar);
+  $("tipoHint").textContent = cronometrar
+    ? "Corre no relógio: o tempo de cada questão é registrado."
+    : "Sem cronômetro: o app registra as passadas e as marcações, e o tempo sai vazio no export.";
+}
+function pintaNome(){
+  const n=nomeBase();
+  $("nomePrev").textContent = "Arquivo e nome da sessão: "+n+".csv";
+  if($("identResumo")){ $("identResumo").textContent = n || "(sem identificação)";
+    $("identResumo").classList.toggle("vazio", !n); }
+}
+document.querySelectorAll("#segTipo button").forEach(b=>b.onclick=()=>{
+  ficha.tipo=b.dataset.v; cronometrar=TIPOS[ficha.tipo];
+  if(started) ev({ev:"ficha",campo:"tipo",valor:ficha.tipo});
+  pintaTipo(); pintaNome(); paint();
+});
 // O vocabulário mora fora da sessão: sobrevive a "Nova" e vira autocompletar
 // a partir da segunda sessão, sem eu ter que adivinhar o seu vocabulário.
 const VKEY="sessao:vocab:v1";
@@ -1092,28 +1167,44 @@ function paintOlhar(){
 function openEnd(){
   setRunning(false);                       // fechamento não é tempo de prova
   sairRev();
-  FICHA.forEach(([k,el])=>$(el).value=ficha[k]||"");
+  pintaNome();
   $("mItens").value=ficha.itens||"";
   $("mItensCalc").textContent="deste set ("+itensDoSet()+")";
   const f=contaFaltas();
   $("endRev").textContent = f ? "Conferir ("+f+")" : "Conferir";
   $("endRev").classList.toggle("alerta", f>0);
   paintVocab(); paintOlhar();
+  $("setup").classList.add("hide");
   $("endSheet").classList.remove("hide");
   $("endSheet").scrollTop=0;
 }
 function closeEnd(){ $("endSheet").classList.add("hide"); }
 FICHA.forEach(([k,el])=>{
-  $(el).addEventListener("input", e=>{ ficha[k]=e.target.value; save(); });
+  $(el).addEventListener("input", e=>{ ficha[k]=e.target.value; pintaNome(); save(); });
   $(el).addEventListener("change", e=>{ ficha[k]=e.target.value.trim(); e.target.value=ficha[k];
-    ev({ev:"ficha",campo:k,valor:ficha[k]}); });
+    pintaNome(); if(started) ev({ev:"ficha",campo:k,valor:ficha[k]}); });
 });
+$("mData").addEventListener("change", e=>{ ficha.data=e.target.value||hojeISO();
+  e.target.value=ficha.data; pintaNome(); if(started) ev({ev:"ficha",campo:"data",valor:ficha.data}); });
 $("mItens").addEventListener("input", e=>{ ficha.itens=e.target.value.replace(/\D/g,""); save(); });
 $("mItens").addEventListener("change", e=>{ e.target.value=ficha.itens;
   ev({ev:"ficha",campo:"itens",valor:ficha.itens}); });
 $("mItensCalc").onclick=()=>{ ficha.itens=String(itensDoSet()); $("mItens").value=ficha.itens;
   ev({ev:"ficha",campo:"itens",valor:ficha.itens,de:"contagem do set"}); };
 $("endBack").onclick=closeEnd;
+// Editar a identificação reabre o setup sem tocar na sessão: some o que só faz
+// sentido ao criar (nº de questões, eixos, meta) e Começar vira Salvar.
+function abreEdicao(){
+  closeEnd();
+  FICHA.forEach(([k,el])=>$(el).value=ficha[k]||"");
+  $("mData").value=ficha.data||hojeISO();
+  paintVocab(); pintaTipo(); pintaNome();
+  $("startBtn").textContent="Salvar";
+  $("setup").classList.add("editando");
+  $("setup").classList.remove("hide");
+  $("setup").scrollTop=0;
+}
+$("identEdit").onclick=abreEdicao;
 
 /* ---------- export ---------- */
 const csvv = s => { s=String(s==null?"":s); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
@@ -1140,12 +1231,14 @@ function buildCSV(){
   const L=[];
   L.push("# gerado_por,app sessao v1");
   L.push("# exportado_em,"+iso(Date.now()));
-  L.push("# rotulo,"+csvv(tag));
+  L.push("# sessao,"+csvv(nomeBase()));
+  L.push("# data,"+csvv(ficha.data));
+  L.push("# concurso,"+csvv(ficha.concurso));
   L.push("# materia,"+csvv(ficha.mat));
   L.push("# subtopico,"+csvv(ficha.sub));
   L.push("# fonte,"+csvv(ficha.fonte));
-  L.push("# regime,"+csvv(ficha.regime));
   L.push("# tipo_sessao,"+csvv(ficha.tipo));
+  L.push("# cronometrada,"+(cronometrar?1:0));
   L.push("# itens_da_prova,"+csvv(ficha.itens));
   L.push("# questoes_no_set,"+N);
   L.push("# itens_julgaveis_no_set,"+itensDoSet());
@@ -1153,7 +1246,7 @@ function buildCSV(){
   L.push("# ce_itens,"+eixo(cfgA));
   L.push("# me_alternativas,"+eixo(cfgME));
   L.push("# conta_digitos,"+eixo(cfgB));
-  L.push("# duracao_total,"+fmt(sessionLive()));
+  L.push("# duracao_total,"+(cronometrar?fmt(sessionLive()):""));
   L.push("# olhar,"+csvv(olharList().join(" ")));
   L.push("# param,"+csvv("tipo A: nº de itens · ME: nº de alternativas · B: nº de dígitos"));
   L.push("# gabarito,"+csvv("mesmo alfabeto de itens · X = anulada · vazio = sem gabarito"));
@@ -1169,11 +1262,15 @@ function buildCSV(){
   L.push("q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito");
   for(let q=1;q<=N;q++){
     const a=ans[q]; const t=times[q]||0;
-    if(!a && !t && !pags[q] && !olhar[q]) continue;
+    // passes() entra no filtro porque em sessão sem relógio uma questão visitada
+    // e não respondida não tem tempo nem página própria — e sumiria da tabela.
+    if(!a && !t && !passes(q) && !pags[q] && !olhar[q]) continue;
     const tipo=a?a.tipo:"";
     const itens = a && a.tipo!=="B" ? a.itens.map(itemStr).join(" ").trim() : (a?itemStr(a.itens[0]).replace(/^[0-9]+/,""):"");
     const num = a && a.tipo==="B" ? (a.num||(a.itens[0].r==="-"?"-":"")) : "";
-    L.push([q,tipo,paramDe(a)||"",'"'+itens+'"',num,Math.round(t),fmt(t),passes(q),
+    const temT = times[q]!==undefined;
+    L.push([q,tipo,paramDe(a)||"",'"'+itens+'"',num,
+            temT?Math.round(t):"", temT?fmt(t):"", passes(q),
             csvv(ef[q]?ef[q].v:""), (ef[q]&&ef[q].auto)?1:"", olhar[q]?1:"",'"'+gabStr(q)+'"'].join(","));
   }
   return L.join("\n");
@@ -1186,10 +1283,11 @@ function buildJSONL(){
                 .concat(events)
                 .sort((a,b)=> a.t<b.t?-1 : a.t>b.t?1 : 0);   // append-only de verdade: em ordem
   const eixo = v => v===0 ? "na hora" : v;
-  const meta={t:iso(Date.now()),ev:"meta",rotulo:tag,questoes:N,
+  const meta={t:iso(Date.now()),ev:"meta",sessao:nomeBase(),questoes:N,
     ce_itens:eixo(cfgA), me_alternativas:eixo(cfgME), conta_digitos:eixo(cfgB),
+    data:ficha.data||null, concurso:ficha.concurso||null,
     materia:ficha.mat||null, subtopico:ficha.sub||null, fonte:ficha.fonte||null,
-    regime:ficha.regime||null, tipo_sessao:ficha.tipo||null,
+    tipo_sessao:ficha.tipo||null, cronometrada:cronometrar,
     itens_da_prova:ficha.itens?+ficha.itens:null, itens_julgaveis_no_set:itensDoSet(),
     olhar:olharList(), pags:Object.assign({},pags),
     pags_efetivas:pagsEfetivas(),
@@ -1201,14 +1299,11 @@ function dl(name,txt,mime){
   a.href=URL.createObjectURL(new Blob([txt],{type:mime}));
   a.download=name; a.click();
 }
-const slug = s => (s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-  .toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,32);
 function doExport(){
   learnVocab();
-  const base=[new Date().toISOString().slice(0,16).replace(/[:T]/g,""),
-              slug(ficha.fonte||tag), slug(ficha.mat)].filter(Boolean).join("-");
-  dl("sessao-"+base+".csv","\ufeff"+buildCSV(),"text/csv");
-  setTimeout(()=>dl("eventos-"+base+".jsonl",buildJSONL(),"application/x-ndjson"),350);
+  const base=nomeBase();
+  dl(base+".csv","\ufeff"+buildCSV(),"text/csv");
+  setTimeout(()=>dl(base+"_eventos.jsonl",buildJSONL(),"application/x-ndjson"),350);
   exported=true;
   toast("CSV + trilha exportados");
 }
@@ -1267,18 +1362,31 @@ function pintaEixos(){
 pintaEixos();
 
 $("startBtn").onclick=()=>{
+  // Em modo edição o mesmo botão só fecha e volta — a sessão continua de pé.
+  if($("setup").classList.contains("editando")){
+    $("setup").classList.add("hide");
+    $("setup").classList.remove("editando");
+    $("startBtn").textContent="Começar";
+    learnVocab(); saveNow(); openEnd();
+    return;
+  }
   const n=parseInt($("nIn").value,10);
   if(!n||n<1||n>300){ $("nIn").focus(); return; }
   if(pending && !confirm("Há uma sessão guardada que será apagada. Começar do zero mesmo assim?")) return;
   pending=null;
   const g=parseFloat(String($("goalIn").value).replace(",","."));
-  N=n; goal = g>0 ? g*60 : 0; tag=$("tagIn").value.trim();
+  N=n; goal = g>0 ? g*60 : 0;
   times={}; log=[]; visit=null; ans={}; pags={}; events=[]; sessionAccum=0; sessionStart=null; running=false;
-  ficha=fichaVazia(); olhar={}; gab={}; gabAberto=null; curQ=null;
+  // ficha NÃO é zerada: os campos de identificação acabaram de ser preenchidos
+  // aqui em cima. Só o que é da sessão em si volta ao zero.
+  ficha.itens=""; olhar={}; gab={}; gabAberto=null; curQ=null;
   document.body.classList.remove("running","paused"); $("toggle").textContent="Pausar";
   const eixo = v => v===0 ? "na hora" : v;
-  started=true; ev({ev:"start",questoes:N,rotulo:tag,
+  started=true; ev({ev:"start",questoes:N,sessao:nomeBase(),cronometrada:cronometrar,
+    tipo_sessao:ficha.tipo, data:ficha.data, concurso:ficha.concurso,
+    materia:ficha.mat, subtopico:ficha.sub, fonte:ficha.fonte,
     ce_itens:eixo(cfgA), me_alternativas:eixo(cfgME), conta_digitos:eixo(cfgB)});
+  pintaTipo(); pintaNome();
   buildGrid(); paint(); save(); showPane("paneGrid");
   closeEnd(); $("setup").classList.add("hide");
 };
@@ -1290,6 +1398,10 @@ document.addEventListener("keydown",e=>{
   if(e.key==="ArrowLeft"  && curQ && curQ>1){ e.preventDefault(); select(curQ-1); }
 });
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && running) wake(); });
+
+FICHA.forEach(([k,el])=>$(el).value=ficha[k]||"");
+$("mData").value=ficha.data;
+pintaTipo(); pintaNome();
 
 (async()=>{
   await loadVocab();
@@ -1307,7 +1419,7 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden && runnin
       ' <a href="#" id="resumeLink" style="color:var(--brass)">Retomar</a>';
     $("nIn").value=prev.N;
     if(prev.goal) $("goalIn").value=prev.goal/60;
-    if(prev.tag) $("tagIn").value=prev.tag;
+
     $("resumeLink").onclick=e=>{ e.preventDefault(); retomar(prev); };
   }
 })();

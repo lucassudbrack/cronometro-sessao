@@ -3,7 +3,7 @@
 // a ser servidas do próprio pacote.
 //
 // Bump em CACHE a cada publicação — é o que força o aparelho a pegar a versão nova.
-const CACHE = "sessao-v3";
+const CACHE = "sessao-v4";
 
 const ASSETS = [
   "./",
