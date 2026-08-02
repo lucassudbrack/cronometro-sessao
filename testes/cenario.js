@@ -162,21 +162,21 @@ setRunning(false);
 /* ---- CSV ---- */
 const csv = buildCSV().split("\n");
 const head = csv.filter(l => l.startsWith("#"));
-const cols = csv.find(l => l.startsWith("q,tipo"));
+const cols = csv.find(l => l.startsWith("q,apelido"));
 const rows = csv.slice(csv.indexOf(cols) + 1);
-EQ("um unico cabecalho de colunas", csv.filter(l => l.startsWith("q,tipo")).length, 1);
+EQ("um unico cabecalho de colunas", csv.filter(l => l.startsWith("q,apelido")).length, 1);
 EQ("nenhuma linha antes do bloco de comentario", csv[0].startsWith("#"), true);
-EQ("colunas", cols, "q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito");
+EQ("colunas", cols, "q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito");
 EQ("valor com virgula fica citado",
    head.find(l => l.startsWith("# fonte")), '# fonte,"PDF, misto"');
 EQ("o bloco abre pelo nome da sessao",
    head.find(l => l.startsWith("# sessao")), "# sessao,20260802_anpec_estatistica_prova_pdf_misto");
 EQ("e diz que foi cronometrada", head.find(l => l.startsWith("# cronometrada")), "# cronometrada,1");
 EQ("materia no bloco", head.find(l => l.startsWith("# materia")), "# materia,Estatística");
-EQ("linha da Q1", rows[0], '1,A,5,"Vc F? V - FxB",,90,01:30,3,1,1,1,""');
-EQ("linha da Q2 tipo B", rows[1], '2,B,3,"?",042,30,00:30,1,2,1,,""');
-EQ("linha da Q3", rows[2], '3,,,"",,15,00:15,1,3,1,1,""');
-EQ("linha da Q4 com pagina", rows[3], '4,,,"",,50,00:50,1,7-8,,,""');
+EQ("linha da Q1", rows[0], '1,1,A,5,"Vc F? V - FxB",,90,01:30,3,1,1,1,""');
+EQ("linha da Q2 tipo B", rows[1], '2,2,B,3,"?",042,30,00:30,1,2,1,,""');
+EQ("linha da Q3", rows[2], '3,3,,,"",,15,00:15,1,3,1,1,""');
+EQ("linha da Q4 com pagina", rows[3], '4,7-8,,,"",,50,00:50,1,7-8,,,""');
 EQ("duracao total no bloco",
    head.find(l => l.startsWith("# duracao_total")), "# duracao_total,03:05");
 EQ("Q3 fechada quando o fechamento parou o cronometro", Math.round(times[3]), 15);
@@ -321,9 +321,10 @@ EQ("e a resposta do item acompanha", ans[3].itens[0].r, "12");
 
 // o eixo escolhido por questão chega no CSV
 const csv5 = buildCSV().split("\n");
-const cols5 = csv5.find(l => l.startsWith("q,tipo"));
+const cols5 = csv5.find(l => l.startsWith("q,apelido"));
 const r5 = csv5.slice(csv5.indexOf(cols5) + 1);
-EQ("param por questao no CSV", r5.slice(0, 3).map(l => l.split(",").slice(0, 3).join("|")),
+EQ("param por questao no CSV",
+   r5.slice(0, 3).map(l => { const p = l.split(","); return [p[0], p[2], p[3]].join("|"); }),
    ["1|A|2", "2|ME|3", "3|B|2"]);
 EQ("o bloco declara o eixo em aberto",
    csv5.find(l => l.startsWith("# ce_itens")), "# ce_itens,na hora");
@@ -421,7 +422,7 @@ EQ("olhar depois do gabarito vem carimbado",
 
 // export
 const csv6 = buildCSV().split("\n");
-const c6 = csv6.find(l => l.startsWith("q,tipo"));
+const c6 = csv6.find(l => l.startsWith("q,apelido"));
 const r6 = csv6.slice(csv6.indexOf(c6) + 1);
 EQ("gabarito de tipo A na coluna, com o anulado",
    r6[0].split(",").pop(), '"V X F"');
@@ -467,17 +468,73 @@ EQ("a conferencia nao cobra tempo em sessao sem relogio",
 
 const csv7 = buildCSV().split("\n");
 const h7 = csv7.filter(l => l.startsWith("#"));
-const c7 = csv7.find(l => l.startsWith("q,tipo"));
+const c7 = csv7.find(l => l.startsWith("q,apelido"));
 const r7 = csv7.slice(csv7.indexOf(c7) + 1);
 EQ("o bloco diz que nao foi cronometrada",
    h7.find(l => l.startsWith("# cronometrada")), "# cronometrada,0");
 EQ("duracao total sai vazia", h7.find(l => l.startsWith("# duracao_total")), "# duracao_total,");
 EQ("segundos e mmss saem vazios, nao zero",
-   r7.map(l => { const p = l.split(","); return p[5] + "|" + p[6]; }), ["|", "|"]);
+   r7.map(l => { const p = l.split(","); return p[6] + "|" + p[7]; }), ["|", "|"]);
 EQ("mas as passadas continuam saindo",
-   r7.map(l => l.split(",")[7]), ["1", "1"]);
+   r7.map(l => l.split(",")[8]), ["1", "1"]);
 EQ("o jsonl marca a sessao como nao cronometrada",
    JSON.parse(buildJSONL().split("\n")[0]).cronometrada, false);
+
+/* ---- cenário 8: apelidos ---- */
+clicaTipo("prova");
+$("nIn").value = "4"; paintApelidos();
+EQ("a lista do setup tem uma linha por questao",
+   $("aplList").querySelectorAll(".aplrow").length, 4);
+EQ("e o placeholder mostra o default", [...$("aplList").querySelectorAll("input")]
+   .map(i => i.placeholder), ["1", "2", "3", "4"]);
+const aplIn = q => $("aplList").querySelector('[data-a="' + q + '"]');
+aplIn(1).value = "ANPEC14 Q5"; aplIn(1).dispatchEvent(new Event("change"));
+aplIn(3).value = "BACEN22 Q10"; aplIn(3).dispatchEvent(new Event("change"));
+$("startBtn").click();
+
+EQ("apelido definido vale como rotulo", rotulo(1), "ANPEC14 Q5");
+EQ("sem apelido, vale a pagina", rotulo(2), "2");
+
+paint();
+const cel0 = q => document.querySelector('.q[data-q="' + q + '"]');
+EQ("sem apelido e sem pagina, a celula e so o numero",
+   [cel0(2).querySelector(".n").textContent, cel0(2).querySelector(".ord").textContent],
+   ["2", ""]);
+
+curQ = 2; setPag("9");
+EQ("e a pagina digitada passa a ser o rotulo", rotulo(2), "9");
+EQ("mas o apelido continua ganhando", rotulo(1), "ANPEC14 Q5");
+EQ("em lista, pagina nao vira nome de questao", [rotuloQ(1), rotuloQ(2)],
+   ["ANPEC14 Q5", "Q2"]);
+
+paint();
+const cel = q => document.querySelector('.q[data-q="' + q + '"]');
+EQ("a grade mostra o apelido", cel(1).querySelector(".n").textContent, "ANPEC14 Q5");
+EQ("e revela o ordinal no canto quando difere", cel(1).querySelector(".ord").textContent, "1");
+// a Q2 foi para a pagina 9, entao o cumulativo empurra a Q4 para a 11:
+// a celula deixa de coincidir com a ordem e o ordinal aparece no canto
+EQ("pagina deslocada tambem revela o ordinal",
+   [cel(4).querySelector(".n").textContent, cel(4).querySelector(".ord").textContent],
+   ["11", "4"]);
+EQ("apelido longo encolhe a fonte", cel(1).querySelector(".n").style.fontSize, "8px");
+
+select(1);
+EQ("o cabecalho usa o apelido", /ANPEC14 Q5/.test($("label").textContent), true);
+EQ("o campo da questao traz o apelido", $("aplIn").value, "ANPEC14 Q5");
+$("aplIn").value = "ANPEC14 Q7"; $("aplIn").dispatchEvent(new Event("change"));
+EQ("da para renomear pela questao", apelidos[1], "ANPEC14 Q7");
+EQ("e vira evento", events[events.length - 1].ev, "apelido");
+$("aplIn").value = ""; $("aplIn").dispatchEvent(new Event("change"));
+EQ("apagar volta ao default", [apelidos[1], rotulo(1)], [undefined, "1"]);
+
+aplIn(1).value = "ANPEC14 Q5"; aplIn(1).dispatchEvent(new Event("change"));
+const csv8 = buildCSV().split("\n");
+const c8 = csv8.find(l => l.startsWith("q,apelido"));
+const r8 = csv8.slice(csv8.indexOf(c8) + 1);
+EQ("apelido sai como segunda coluna",
+   r8.map(l => l.split(",").slice(0, 2).join("|")), ["1|ANPEC14 Q5", "2|9"]);
+EQ("o jsonl leva os apelidos digitados",
+   JSON.parse(buildJSONL().split("\n")[0]).apelidos, { 1: "ANPEC14 Q5", 3: "BACEN22 Q10" });
 
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +

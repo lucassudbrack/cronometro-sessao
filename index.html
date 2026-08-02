@@ -86,7 +86,9 @@
   #grid{display:grid; gap:6px; grid-template-columns:repeat(auto-fill,minmax(60px,1fr)); align-content:start}
   .q{position:relative; aspect-ratio:1; background:var(--chassis-2); border:1px solid var(--line);
     border-radius:4px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px}
-  .q .n{font-family:var(--mono); font-weight:800; font-size:17px}
+  .q .n{font-family:var(--mono); font-weight:800; font-size:17px; max-width:100%;
+    padding:0 3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .q .ord{position:absolute; top:3px; left:4px; font-family:var(--mono); font-size:8px; color:var(--dim)}
   .q .t{font-family:var(--mono); font-size:9px; color:var(--mute)}
   .q.done{border-color:var(--dim)}
   .q.answered{background:#1F2A2A; border-color:var(--teal)}
@@ -123,6 +125,11 @@
   .pagrow input{flex:1; min-width:0; padding:7px 8px; font-size:12px; text-align:center; letter-spacing:.08em}
   .pagrow input.odd{border-color:var(--brass)}
   .pagrow input.auto{color:var(--dim)}
+  .apl{max-height:34vh; overflow:auto; display:flex; flex-direction:column; gap:4px;
+    border:1px solid var(--line); border-radius:3px; padding:6px; background:var(--sunken)}
+  .aplrow{display:flex; gap:6px; align-items:center}
+  .aplrow .n{font-family:var(--mono); font-size:10px; color:var(--dim); flex:0 0 24px; text-align:right}
+  .aplrow input{padding:6px 8px; font-size:12px; background:var(--chassis)}
   .pagrow button{flex:0 0 34px; padding:8px 0; font-family:var(--mono); font-size:13px}
 
   .item{border:1px solid var(--line); border-radius:4px; padding:7px; margin-bottom:6px; background:var(--chassis-2)}
@@ -249,6 +256,10 @@
   </div>
   <div class="paramrow" id="paramRow"></div>
   <div class="pagrow">
+    <span class="eyebrow">Apelido</span>
+    <input id="aplIn" autocomplete="off" spellcheck="false" enterkeyhint="done">
+  </div>
+  <div class="pagrow">
     <span class="eyebrow">Pág. do caderno</span>
     <input id="pagIn" placeholder="7 ou 7-8" autocomplete="off" spellcheck="false" enterkeyhint="done">
     <button id="pagSame" title="Repetir a página da questão anterior">↑</button>
@@ -315,6 +326,11 @@
   <div class="field"><span class="eyebrow">Fonte</span>
     <input id="mFonte" list="vFonte" autocomplete="off" placeholder="PDF Estratégia"></div>
   <p class="hint" id="nomePrev"></p>
+  <div class="field soNova">
+    <span class="eyebrow">Apelidos das questões — opcional</span>
+    <p class="hint">Para set montado de provas diferentes. Em branco, vale a página a que a questão se refere.</p>
+    <div class="apl" id="aplList"></div>
+  </div>
   <div class="field soNova">
     <span class="eyebrow">C / E — itens por questão</span>
     <div class="numseg" id="segA"></div>
@@ -391,6 +407,10 @@ let times={}, log=[], visit=null, ans={}, events=[];
 // pags vive fora de ans de propósito: a página do caderno é fato físico da sessão,
 // não parte da resposta. Trocar o tipo da questão zera ans[q] e não pode levar a página junto.
 let pags={};
+// Apelido da questao: para set montado de provas diferentes ("ANPEC14 Q5").
+// Sem apelido, vale a pagina a que ela se refere — que por sua vez, sem
+// pagina digitada, e a ordem. Um default encadeia no outro.
+let apelidos={};
 // ficha = metadados da sessão, preenchidos no fechamento. olhar = questões a revisar,
 // marcadas antes do gabarito.
 // Identificação da sessão, preenchida antes de começar. Sem "regime" e sem
@@ -503,7 +523,8 @@ function buildGrid(){
   for(let i=1;i<=N;i++){
     const d=document.createElement("div");
     d.className="q"; d.dataset.q=i;
-    d.innerHTML='<span class="n">'+i+'</span><span class="t" data-t="'+i+'">–</span>'+
+    d.innerHTML='<span class="ord" data-o="'+i+'"></span>'+
+                '<span class="n" data-n="'+i+'"></span><span class="t" data-t="'+i+'">–</span>'+
                 '<span class="passes" data-p="'+i+'"></span><span class="dot" data-d="'+i+'"></span>';
     d.addEventListener("click",()=>select(i));
     g.appendChild(d);
@@ -528,7 +549,12 @@ function paint(){
     el.classList.toggle("done", has && !(visit&&visit.q===i));
     el.classList.toggle("answered", isComplete(i));
     el.classList.toggle("over", goal>0 && t>goal);
-    el.querySelector('[data-t="'+i+'"]').textContent = has? fmt(t) : "–";
+    el.querySelector('[data-t="'+i+'"]').textContent = cronometrar ? (has? fmt(t) : "–") : "";
+    const rot=rotulo(i), nEl=el.querySelector('[data-n="'+i+'"]');
+    nEl.textContent=rot;
+    nEl.style.fontSize = rot.length<=2 ? "17px" : rot.length<=4 ? "13px"
+                       : rot.length<=7 ? "10px" : "8px";
+    el.querySelector('[data-o="'+i+'"]').textContent = rot===String(i) ? "" : i;
     const p=passes(i);
     el.querySelector('[data-p="'+i+'"]').textContent = p>1 ? "×"+p : "";
     const a=ans[i], np=paramDe(a);
@@ -537,7 +563,8 @@ function paint(){
   }
   $("badge").textContent = visit ? visit.q : "—";
   $("badge").classList.toggle("idle", !visit);
-  $("label").textContent = visit ? ("questão "+visit.q+(passes(visit.q)>1? " · "+passes(visit.q)+"ª passada":"")) : "toque em um número para começar";
+  $("label").textContent = visit ? (rotuloQ(visit.q)+
+    (passes(visit.q)>1? " · "+passes(visit.q)+"ª passada":"")) : "toque em um número para começar";
   const done=Object.keys(times).filter(q=>times[q]>0);
   $("avg").textContent = done.length ? fmt(done.reduce((a,q)=>a+times[q],0)/done.length) : "—";
   if($("paneLog").classList.contains("on")) paintLog();
@@ -553,16 +580,64 @@ const fimDe = s => { const m=String(s).match(/\d+/g); return m ? +m[m.length-1] 
 // ocupa 1-2, a Q4 nasce na 3, não na 4. Um passo só, do começo ao fim.
 // pags guarda apenas o que foi digitado; o default nunca é materializado, para
 // que o export consiga dizer o que você conferiu e o que o app deduziu da ordem.
+// Memoizado: paint() consulta a pagina de cada questao, e recalcular a lista
+// inteira por questao daria O(N^2) a cada marcacao.
+let _pagCache=null;
+const invalidaPags = () => { _pagCache=null; };
 function pagsEfetivas(){
+  if(_pagCache) return _pagCache;
   const out={}; let prox=1;
   for(let q=1;q<=N;q++){
     out[q] = pags[q] ? {v:pags[q], auto:false} : {v:String(prox), auto:true};
     const f=fimDe(out[q].v);
     prox = f!=null ? f+1 : prox+1;
   }
-  return out;
+  return _pagCache=out;
 }
 const pagEf = q => pagsEfetivas()[q] || {v:String(q), auto:true};
+// Na grade a celula E a questao, entao o rotulo pode ser a pagina: o ordinal
+// fica no canto. Em lista, "7-8" como nome de linha so confunde — pagina nao e
+// nome de questao —, entao vale o apelido ou Q<n>.
+const rotulo  = q => apelidos[q] || pagEf(q).v;
+const rotuloQ = q => apelidos[q] || ("Q"+q);
+// A lista do setup e reconstruida quando o numero de questoes muda.
+function paintApelidos(){
+  const box=$("aplList"), n=parseInt($("nIn").value,10)||0;
+  if(box.dataset.n===String(n)) { // so atualiza valores, sem recriar e perder foco
+    for(let q=1;q<=n;q++){ const i=box.querySelector('[data-a="'+q+'"]');
+      if(i && i.value!==(apelidos[q]||"")) i.value=apelidos[q]||""; }
+    return;
+  }
+  box.dataset.n=String(n); box.innerHTML="";
+  for(let q=1;q<=Math.min(n,300);q++){
+    const row=document.createElement("div"); row.className="aplrow";
+    const lab=document.createElement("span"); lab.className="n"; lab.textContent=q;
+    const inp=document.createElement("input");
+    inp.dataset.a=q; inp.autocomplete="off"; inp.spellcheck=false;
+    inp.placeholder=String(q); inp.value=apelidos[q]||"";
+    inp.oninput=()=>{ setApelido(q, inp.value, true); };
+    inp.onchange=()=>{ setApelido(q, inp.value, false); };
+    row.appendChild(lab); row.appendChild(inp); box.appendChild(row);
+  }
+}
+function setApelido(q, v, digitando){
+  const s=String(v).trim();
+  if((apelidos[q]||"")===s) return;
+  if(s) apelidos[q]=s; else delete apelidos[q];
+  if(!digitando && started) ev({ev:"apelido", q:q, apelido:apelidos[q]||null});
+  if(started) paint();
+  save();
+}
+function paintApl(){
+  const el=$("aplIn"), v=apelidos[curQ]||"";
+  if(el.value!==v) el.value=v;
+  el.placeholder=pagEf(curQ).v;
+}
+$("aplIn").addEventListener("input", e=>setApelido(curQ, e.target.value, true));
+$("aplIn").addEventListener("change", e=>{ setApelido(curQ, e.target.value, false); paintApl(); });
+$("aplIn").addEventListener("keydown", e=>{ if(e.key==="Enter") e.target.blur(); });
+$("nIn").addEventListener("input", paintApelidos);
+
 function paintPag(){
   const p=pagEf(curQ), el=$("pagIn");
   if(el.value!==p.v) el.value=p.v;
@@ -573,6 +648,7 @@ function setPag(v, fromInput){
   const s=pagNorm(v);
   if((pags[curQ]||"")===s) return;
   if(s) pags[curQ]=s; else delete pags[curQ];
+  invalidaPags();
   if(!fromInput) paintPag(); else $("pagIn").classList.toggle("odd", !pagOK(s));
 }
 $("pagIn").addEventListener("input", e=>{ setPag(e.target.value, true); save(); });
@@ -640,7 +716,7 @@ function renderQ(){
   const q=curQ;
   $("badge").textContent=q;
   $("backBtn").textContent = revisando ? "Conferência" : "Grade";
-  paintPag(); paintParam();
+  paintPag(); paintApl(); paintParam();
   document.querySelectorAll("#typeRow button").forEach(b=>
     b.classList.toggle("sel", ans[q] && ans[q].tipo===b.dataset.t));
   const area=$("answerArea");
@@ -746,12 +822,14 @@ function paintLog(){
     seen[v.q]=(seen[v.q]||0)+1;
     const live=(v===visit);
     return '<div class="lrow'+(live?" live":"")+'"><span class="s">'+(i+1)+'</span>'+
-      '<span class="qq">Q'+v.q+'</span>'+
+      '<span class="qq"></span>'+
       '<span class="w">'+hhmm(v.at)+(seen[v.q]>1?" · "+seen[v.q]+"ª volta":"")+
         (v.trunc?' · <span class="tr">truncada</span>':'')+'</span>'+
       '<span class="d'+(v.trunc?" tr":"")+'"'+(live?' data-livevisit="1"':'')+'>'+
         (v.trunc?"≥":"")+fmt(live?visitLive():v.sec)+'</span></div>';
   }).join("");
+  [...el.querySelectorAll(".lrow")].forEach((r,i)=>{
+    r.querySelector(".qq").textContent=rotuloQ(all[i].q); });
   el.scrollTop=el.scrollHeight;
 }
 function tick(){
@@ -787,7 +865,7 @@ function snapshot(){
       vis.sec+=d; t[visit.q]=(t[visit.q]||0)+d;
     }
   }
-  return {fmt:3,N,goal,cfgA,cfgME,cfgB,cronometrar,times:t,log,visit:vis,ans,pags,ficha,olhar,gab,gabAberto,events,
+  return {fmt:3,N,goal,cfgA,cfgME,cfgB,cronometrar,times:t,log,visit:vis,ans,pags,apelidos,ficha,olhar,gab,gabAberto,events,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -825,7 +903,7 @@ function retomar(prev){
     if(a.tipo==="ME" && a.alt===undefined) a.alt=prev.nAlt||5;
     if(a.tipo==="B"  && a.dig===undefined) a.dig=3;
   });
-  pags=prev.pags||{}; ficha=Object.assign(fichaVazia(),prev.ficha||{}); olhar=prev.olhar||{};
+  pags=prev.pags||{}; apelidos=prev.apelidos||{}; invalidaPags(); ficha=Object.assign(fichaVazia(),prev.ficha||{}); olhar=prev.olhar||{};
   if(!TIPOS.hasOwnProperty(ficha.tipo)) ficha.tipo="prova";   // fmt<3 guardava texto livre
   gab=prev.gab||{}; gabAberto=prev.gabAberto||null;
   if(prev.visit){
@@ -929,7 +1007,7 @@ function paintGab(){
     const box=document.createElement("div"); box.className="gq";
     const h=document.createElement("div"); h.className="gqhead";
     h.innerHTML='<span class="qq"></span><span class="sub"></span>';
-    h.querySelector(".qq").textContent="Q"+q;
+    h.querySelector(".qq").textContent=rotuloQ(q);
     h.querySelector(".sub").textContent =
       a.tipo==="A" ? a.itens.length+" itens · V certo, F errado, X anulada"
     : a.tipo==="ME" ? a.alt+" alternativas · X anulada"
@@ -1082,8 +1160,8 @@ function paintRev(){
   // Falta primeiro: é o que faz a análise perder informação. E as não visitadas
   // viram uma linha só, senão um set de 40 com 12 feitas afoga o que importa.
   const naoVis=av.filter(p=>p.txt==="não visitada").map(p=>p.q);
-  f.forEach(p=>linha("Q"+p.q,"falta",p.txt,p.q));
-  av.filter(p=>p.txt!=="não visitada").forEach(p=>linha("Q"+p.q,"aviso",p.txt,p.q));
+  f.forEach(p=>linha(rotuloQ(p.q),"falta",p.txt,p.q));
+  av.filter(p=>p.txt!=="não visitada").forEach(p=>linha(rotuloQ(p.q),"aviso",p.txt,p.q));
   const auto=pagsAuto();
   if(auto.length) linha("—","aviso",
     auto.length+(auto.length===1?" página veio da ordem, não conferida: "
@@ -1259,7 +1337,8 @@ function buildCSV(){
   L.push("# itens_sem_gabarito,"+tl.sem);
   L.push("# pag_auto,"+csvv("1 = a pagina veio da ordem das questoes, nao foi conferida"));
   const ef=pagsEfetivas();
-  L.push("q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito");
+  L.push("# apelido,"+csvv("nome da questao; sem apelido, e a pagina a que ela se refere"));
+  L.push("q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito");
   for(let q=1;q<=N;q++){
     const a=ans[q]; const t=times[q]||0;
     // passes() entra no filtro porque em sessão sem relógio uma questão visitada
@@ -1269,7 +1348,7 @@ function buildCSV(){
     const itens = a && a.tipo!=="B" ? a.itens.map(itemStr).join(" ").trim() : (a?itemStr(a.itens[0]).replace(/^[0-9]+/,""):"");
     const num = a && a.tipo==="B" ? (a.num||(a.itens[0].r==="-"?"-":"")) : "";
     const temT = times[q]!==undefined;
-    L.push([q,tipo,paramDe(a)||"",'"'+itens+'"',num,
+    L.push([q,csvv(rotulo(q)),tipo,paramDe(a)||"",'"'+itens+'"',num,
             temT?Math.round(t):"", temT?fmt(t):"", passes(q),
             csvv(ef[q]?ef[q].v:""), (ef[q]&&ef[q].auto)?1:"", olhar[q]?1:"",'"'+gabStr(q)+'"'].join(","));
   }
@@ -1289,7 +1368,7 @@ function buildJSONL(){
     materia:ficha.mat||null, subtopico:ficha.sub||null, fonte:ficha.fonte||null,
     tipo_sessao:ficha.tipo||null, cronometrada:cronometrar,
     itens_da_prova:ficha.itens?+ficha.itens:null, itens_julgaveis_no_set:itensDoSet(),
-    olhar:olharList(), pags:Object.assign({},pags),
+    olhar:olharList(), pags:Object.assign({},pags), apelidos:Object.assign({},apelidos),
     pags_efetivas:pagsEfetivas(),
     gabarito_visto_em:gabAberto, gabarito:Object.assign({},gab), conferencia:tally()};
   return [meta].concat(rows).map(o=>JSON.stringify(o)).join("\n");
@@ -1379,7 +1458,7 @@ $("startBtn").onclick=()=>{
   times={}; log=[]; visit=null; ans={}; pags={}; events=[]; sessionAccum=0; sessionStart=null; running=false;
   // ficha NÃO é zerada: os campos de identificação acabaram de ser preenchidos
   // aqui em cima. Só o que é da sessão em si volta ao zero.
-  ficha.itens=""; olhar={}; gab={}; gabAberto=null; curQ=null;
+  ficha.itens=""; olhar={}; gab={}; gabAberto=null; curQ=null; invalidaPags();
   document.body.classList.remove("running","paused"); $("toggle").textContent="Pausar";
   const eixo = v => v===0 ? "na hora" : v;
   started=true; ev({ev:"start",questoes:N,sessao:nomeBase(),cronometrada:cronometrar,
@@ -1401,7 +1480,7 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden && runnin
 
 FICHA.forEach(([k,el])=>$(el).value=ficha[k]||"");
 $("mData").value=ficha.data;
-pintaTipo(); pintaNome();
+pintaTipo(); pintaNome(); paintApelidos();
 
 (async()=>{
   await loadVocab();
