@@ -67,6 +67,22 @@
   /* questao */
   .qhead{display:flex; align-items:center; gap:8px; margin-bottom:10px}
   .qhead .sp{flex:1}
+  .revbar{display:none; font-size:10px; line-height:1.45; color:var(--teal); border:1px solid var(--teal);
+    border-left-width:3px; border-radius:3px; padding:6px 8px; margin-bottom:10px}
+  body.rev .revbar{display:block}
+
+  /* conferencia */
+  .prow{display:flex; gap:8px; align-items:center; padding:9px 4px; border-bottom:1px solid var(--line);
+    font-size:11px; cursor:pointer}
+  .prow .qq{font-family:var(--mono); font-weight:800; width:36px; flex:0 0 36px}
+  .prow .k{font-family:var(--mono); font-size:8px; letter-spacing:.1em; text-transform:uppercase;
+    flex:0 0 46px; border:1px solid; border-radius:2px; padding:2px 0; text-align:center}
+  .prow.falta .k{color:var(--alert); border-color:var(--alert)}
+  .prow.aviso .k{color:var(--mute); border-color:var(--dim)}
+  .prow .w{flex:1; color:var(--paper)}
+  .prow.aviso .w{color:var(--mute)}
+  .prow .go{font-family:var(--mono); color:var(--dim)}
+  .allok{color:var(--teal); font-size:12px; line-height:1.6; padding:14px 4px}
   .typerow{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:12px}
   .typerow button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
 
@@ -127,6 +143,7 @@
   .ograde button.sel{background:var(--teal); border-color:var(--teal); color:#fff}
   .endbtns{display:grid; grid-template-columns:auto 1fr; gap:6px; margin-top:4px}
   .endbtns button{padding:13px 14px}
+  .endbtns button.alerta{border-color:var(--alert); color:var(--alert)}
   .toast{position:fixed; left:50%; bottom:64px; transform:translateX(-50%); background:var(--teal);
     color:#fff; font-size:12px; font-weight:600; padding:8px 14px; border-radius:20px; opacity:0;
     transition:opacity .2s; pointer-events:none; z-index:9}
@@ -145,6 +162,7 @@
 <div class="pane on" id="paneGrid"><div id="grid"></div></div>
 
 <div class="pane" id="paneQ">
+  <div class="revbar" id="revbar">Conferência — o cronômetro não corre e esta correção fica marcada como tal no log.</div>
   <div class="qhead">
     <button id="prevBtn">◀</button>
     <div class="sp"></div>
@@ -167,6 +185,15 @@
 </div>
 
 <div class="pane" id="paneLog"></div>
+
+<div class="pane" id="paneRev">
+  <div class="qhead">
+    <button id="revBack">Fechamento</button>
+    <div class="sp"></div>
+    <span class="eyebrow" id="revCount"></span>
+  </div>
+  <div id="revList"></div>
+</div>
 
 <div class="foot">
   <div class="stat"><span class="eyebrow">Sessão</span><span class="v" id="total">00:00</span></div>
@@ -231,8 +258,9 @@
   </div>
   <div class="endbtns">
     <button id="endBack">Voltar</button>
-    <button class="primary" id="endExp">Exportar</button>
+    <button id="endRev">Conferir</button>
   </div>
+  <button class="primary" id="endExp" style="padding:14px">Exportar</button>
   <datalist id="vMat"></datalist><datalist id="vSub"></datalist><datalist id="vFonte"></datalist>
   <datalist id="vRegime"></datalist><datalist id="vTipo"></datalist>
 </div>
@@ -259,7 +287,7 @@ let pags={};
 const fichaVazia=()=>({mat:"",sub:"",fonte:"",regime:"",tipo:"",itens:""});
 let ficha=fichaVazia(), olhar={};
 let running=false, segStart=null, sessionAccum=0, sessionStart=null, started=false, curQ=null;
-let exported=false, pending=null;
+let exported=false, pending=null, revisando=false;
 
 const now=()=>performance.now();
 function fmt(s){ if(s==null||isNaN(s)) return "—";
@@ -277,7 +305,12 @@ const sec1 = x => Math.round(x*10)/10;   // o log guarda décimos; o CSV arredon
 
 // Todo evento discreto grava na hora. O jsonl é o lastro: se o app morrer,
 // o log tem que estar em disco até o último toque, não até o último debounce.
-function ev(o){ events.push(Object.assign({t:iso(Date.now())},o)); exported=false; saveNow(); }
+// rev marca o que foi corrigido na conferência, depois do relógio: uma marcação
+// feita sob pressão de tempo e uma correção posterior não são o mesmo dado.
+function ev(o){
+  events.push(Object.assign({t:iso(Date.now())}, o, revisando?{rev:true}:{}));
+  exported=false; saveNow();
+}
 
 function blankAns(tipo){
   if(tipo==="A")  return {tipo:"A",  itens:Array.from({length:nItens},()=>({r:null,c:null,B:false,T:false}))};
@@ -307,6 +340,7 @@ async function wake(){ try{ if("wakeLock" in navigator && !wl) wl=await navigato
 function unwake(){ try{ if(wl){ wl.release(); wl=null; } }catch(e){} }
 
 function select(q, keepPane){
+  sairRev();   // voltar a cronometrar encerra a conferência
   if(visit && visit.q===q){ if(!keepPane) openQ(q); return; }
   commit();
   if(visit){ log.push(visit); ev({ev:"leave", q:visit.q, sec:sec1(visit.sec)}); }
@@ -321,7 +355,7 @@ function select(q, keepPane){
 
 /* ---------- panes ---------- */
 function showPane(id){
-  ["paneGrid","paneQ","paneLog"].forEach(p=>$(p).classList.toggle("on", p===id));
+  ["paneGrid","paneQ","paneLog","paneRev"].forEach(p=>$(p).classList.toggle("on", p===id));
   $("viewBtn").textContent = id==="paneLog" ? "Grade" : "Trilha";
 }
 function openQ(q){ curQ=q; renderQ(); showPane("paneQ"); }
@@ -403,6 +437,7 @@ $("pagSame").onclick=()=>{
 function renderQ(){
   const q=curQ;
   $("badge").textContent=q;
+  $("backBtn").textContent = revisando ? "Conferência" : "Grade";
   paintPag();
   document.querySelectorAll("#typeRow button").forEach(b=>
     b.classList.toggle("sel", ans[q] && ans[q].tipo===b.dataset.t));
@@ -568,6 +603,68 @@ setInterval(()=>{ if(running) saveNow(); }, 5000);
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) saveNow(); });
 window.addEventListener("pagehide",saveNow);
 
+/* ---------- conferencia ----------
+   falta = a análise posterior perde informação sem isso.
+   aviso = o dado está incompleto de propósito ou por circunstância, e você
+   precisa saber, mas não é erro. Nenhum dos dois é preenchido pelo app.     */
+function pendencias(){
+  const out=[];
+  const add=(q,tipo,txt)=>out.push({q,tipo,txt});
+  for(let q=1;q<=N;q++){
+    const a=ans[q], t=times[q]||0;
+    if(!a && !t && !pags[q] && !olhar[q]){ add(q,"aviso","não visitada"); continue; }
+    if(!a){ add(q,"falta","sem tipo escolhido"); }
+    else if(a.tipo==="A"){
+      const sem=a.itens.filter(it=>it.r===null).length;
+      if(sem) add(q,"falta",sem+" de "+a.itens.length+" itens sem resposta");
+      const semc=a.itens.filter(it=>it.r!==null&&it.r!=="-"&&!it.c).length;
+      if(semc) add(q,"falta",semc+(semc>1?" itens":" item")+" sem confiança");
+    }
+    else if(a.tipo==="ME"){
+      if(a.itens[0].r===null) add(q,"falta","sem resposta");
+      else if(a.itens[0].r!=="-" && !a.itens[0].c) add(q,"falta","sem confiança");
+    }
+    else{
+      if(!(a.num&&a.num.length) && a.itens[0].r!=="-") add(q,"falta","sem número e sem branco");
+      else if(a.itens[0].r!=="-" && !a.itens[0].c) add(q,"falta","sem confiança");
+    }
+    if(a && t===0) add(q,"aviso","marcada sem tempo registrado");
+    if(!pags[q]) add(q,"aviso","sem página do caderno");
+    if(log.some(v=>v.q===q&&v.trunc)) add(q,"aviso","tempo truncado por crash — é piso, não medida");
+  }
+  return out;
+}
+function contaFaltas(){ return pendencias().filter(p=>p.tipo==="falta").length; }
+
+function paintRev(){
+  const ps=pendencias();
+  const f=ps.filter(p=>p.tipo==="falta").length, a=ps.length-f;
+  $("revCount").textContent = f+" falta"+(f===1?"":"s")+" · "+a+" aviso"+(a===1?"":"s");
+  const el=$("revList");
+  if(!ps.length){ el.innerHTML='<div class="allok">Nada pendente. Todas as questões visitadas têm tipo, resposta, confiança e página.</div>'; return; }
+  el.innerHTML="";
+  ps.forEach(p=>{
+    const d=document.createElement("div");
+    d.className="prow "+p.tipo;
+    d.innerHTML='<span class="qq">Q'+p.q+'</span><span class="k">'+p.tipo+'</span>'+
+                '<span class="w"></span><span class="go">›</span>';
+    d.querySelector(".w").textContent=p.txt;
+    d.onclick=()=>abrirParaCorrigir(p.q);
+    el.appendChild(d);
+  });
+}
+function openRev(){
+  closeEnd(); revisando=true;
+  document.body.classList.add("rev");
+  paintRev(); showPane("paneRev");
+}
+function sairRev(){ revisando=false; document.body.classList.remove("rev"); }
+// Corrigir depois não é nova passada: abre o painel direto, sem passar por
+// select(), então o cronômetro não liga e a contagem de passadas não mexe.
+function abrirParaCorrigir(q){ openQ(q); }
+$("endRev").onclick=openRev;
+$("revBack").onclick=()=>{ sairRev(); openEnd(); };
+
 /* ---------- folha de fechamento ---------- */
 const FICHA=[["mat","mMat","vMat"],["sub","mSub","vSub"],["fonte","mFonte","vFonte"],
              ["regime","mRegime","vRegime"],["tipo","mTipo","vTipo"]];
@@ -610,9 +707,13 @@ function paintOlhar(){
 }
 function openEnd(){
   setRunning(false);                       // fechamento não é tempo de prova
+  sairRev();
   FICHA.forEach(([k,el])=>$(el).value=ficha[k]||"");
   $("mItens").value=ficha.itens||"";
   $("mItensCalc").textContent="deste set ("+itensDoSet()+")";
+  const f=contaFaltas();
+  $("endRev").textContent = f ? "Conferir ("+f+")" : "Conferir";
+  $("endRev").classList.toggle("alerta", f>0);
   paintVocab(); paintOlhar();
   $("endSheet").classList.remove("hide");
   $("endSheet").scrollTop=0;
@@ -702,16 +803,24 @@ function doExport(){
   toast("CSV + trilha exportados");
 }
 $("expBtn").onclick=openEnd;
-$("endExp").onclick=doExport;
+$("endExp").onclick=()=>{
+  const f=contaFaltas();
+  if(f && !confirm(f+(f===1?" marcação incompleta":" marcações incompletas")+
+                   ". Exportar assim mesmo?")) { openRev(); return; }
+  doExport();
+};
 let tt;
 function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("on"); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove("on"),1500); }
 
 /* ---------- eventos de UI ---------- */
 $("toggle").onclick=()=>{ if(!visit) return; setRunning(!running); };
-$("viewBtn").onclick=()=>{ showPane($("paneLog").classList.contains("on") ? "paneGrid" : "paneLog"); paint(); };
-$("backBtn").onclick=()=>showPane("paneGrid");
-$("prevBtn").onclick=()=>{ if(curQ>1) select(curQ-1); };
-$("nextBtn").onclick=()=>{ if(curQ<N) select(curQ+1); };
+$("viewBtn").onclick=()=>{ sairRev();
+  showPane($("paneLog").classList.contains("on") ? "paneGrid" : "paneLog"); paint(); };
+// Na conferência a navegação entre questões também não pode ligar o cronômetro.
+const irQ = q => revisando ? openQ(q) : select(q);
+$("backBtn").onclick=()=>{ if(revisando){ paintRev(); showPane("paneRev"); } else showPane("paneGrid"); };
+$("prevBtn").onclick=()=>{ if(curQ>1) irQ(curQ-1); };
+$("nextBtn").onclick=()=>{ if(curQ<N) irQ(curQ+1); };
 document.querySelectorAll("#typeRow button").forEach(b=>b.onclick=()=>{
   const t=b.dataset.t;
   if(ans[curQ] && ans[curQ].tipo!==t && !confirm("Trocar o tipo apaga as marcações desta questão. Continuar?")) return;
@@ -726,7 +835,7 @@ function podeDescartar(){
     : "Esta sessão NÃO foi exportada e não há como recuperá-la depois. Descartar mesmo assim?");
 }
 $("newBtn").onclick=()=>{ if(!podeDescartar()) return;
-  setRunning(false); closeEnd(); $("setup").classList.remove("hide"); started=false; };
+  setRunning(false); sairRev(); closeEnd(); $("setup").classList.remove("hide"); started=false; };
 
 function seg(id,cur,cb){
   document.querySelectorAll("#"+id+" button").forEach(b=>{
