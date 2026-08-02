@@ -8,7 +8,7 @@ set -euo pipefail
 
 DONO="lucassudbrack"
 REPO="cronometro-sessao"
-VIS="private"        # troque para public se o Pages recusar (ver abaixo)
+VIS="public"        # Pages em conta gratuita exige repo público
 
 cd "$(dirname "$0")"
 

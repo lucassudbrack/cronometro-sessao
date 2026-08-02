@@ -1,5 +1,7 @@
 # Sessão cronometrada
 
+[https://lucassudbrack.github.io/cronometro-sessao/](https://lucassudbrack.github.io/cronometro-sessao/)
+
 App de arquivo único para registrar sets de prova cronometrados: cronômetro por
 questão com detecção de revisitas, folha de respostas com resposta e confiança
 num toque só, e export de CSV + log de eventos.
