@@ -40,7 +40,7 @@ const runner = `
 <script>
 window.__dl_orig = window.dl;
 window.dl = (name, txt) => window.__files.push({ name, txt });
-(function(){
+(async function(){
 try {
 ${body}
 } catch (e) {

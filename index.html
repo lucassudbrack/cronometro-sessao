@@ -125,7 +125,7 @@
   .pagrow input{flex:1; min-width:0; padding:7px 8px; font-size:12px; text-align:center; letter-spacing:.08em}
   .pagrow input.odd{border-color:var(--brass)}
   .pagrow input.auto{color:var(--dim)}
-  .apl{max-height:34vh; overflow:auto; display:flex; flex-direction:column; gap:4px;
+  .apl{max-height:20vh; overflow:auto; display:flex; flex-direction:column; gap:4px;
     border:1px solid var(--line); border-radius:3px; padding:6px; background:var(--sunken)}
   .aplrow{display:flex; gap:6px; align-items:center}
   .aplrow .n{font-family:var(--mono); font-size:10px; color:var(--dim); flex:0 0 24px; text-align:right}
@@ -191,6 +191,17 @@
     color:var(--paper); background:var(--sunken); border:1px solid var(--line);
     border-radius:3px; padding:8px; word-break:break-all}
   .ident.vazio{color:var(--dim)}
+  .sess{display:flex; flex-direction:column; gap:5px; max-height:26vh; overflow:auto}
+  .srow{display:flex; gap:6px; align-items:center; border:1px solid var(--line);
+    border-radius:3px; padding:7px 8px; background:var(--chassis-2)}
+  .srow.viva{border-color:var(--brass)}
+  .sinfo{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px}
+  .sinfo b{font-family:var(--mono); font-size:11px; font-weight:600; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap}
+  .sinfo span{font-size:9px; color:var(--mute); font-family:var(--mono)}
+  .sinfo span.aberta{color:var(--alert)}
+  .srow button{flex:0 0 auto; padding:7px 9px; font-size:9px}
+  .srow button.del{color:var(--alert); border-color:var(--dim); padding:7px 8px}
   .sheet .hint{font-size:10px; line-height:1.45; color:var(--dim); margin:0}
   .sheet .row2{display:flex; gap:6px; align-items:stretch}
   .sheet .row2 button{flex:0 0 auto; white-space:nowrap}
@@ -302,6 +313,10 @@
     <h1>Nova sessão</h1>
     <p>Toque no número da questão que está resolvendo — o relógio da anterior para no mesmo instante. Marque a resposta ali mesmo.</p>
   </div>
+  <div class="field soNova" id="sessBox" style="display:none">
+    <span class="eyebrow">Sessões guardadas</span>
+    <div class="sess" id="sessList"></div>
+  </div>
   <div class="field">
     <span class="eyebrow">Tipo de sessão</span>
     <div class="seg3" id="segTipo">
@@ -348,7 +363,6 @@
     ao abrir cada uma. O tipo da questão é sempre escolhido na hora.</p>
   <div class="field soNova cronoOnly"><span class="eyebrow">Meta por questão (min) — opcional</span><input id="goalIn" placeholder="4" inputmode="decimal"></div>
   <button class="primary" id="startBtn" style="padding:13px">Começar</button>
-  <p id="resumeNote" style="display:none"></p>
 </div>
 
 <div class="setup sheet hide" id="endSheet">
@@ -393,9 +407,23 @@ const KEY = "sessao:v1";
 const store = (typeof window!=="undefined" && window.storage) ? window.storage : (function(){
   try{ const t="__t"; localStorage.setItem(t,"1"); localStorage.removeItem(t);
     return { get:async k=>{ const v=localStorage.getItem(k); if(v===null) throw 0; return {value:v}; },
-             set:async (k,v)=>{ localStorage.setItem(k,v); return {key:k}; } };
+             set:async (k,v)=>{ localStorage.setItem(k,v); return {key:k}; },
+             del:async k=>{ localStorage.removeItem(k); } };
   }catch(e){ return null; }
 })();
+// Um storage injetado de fora pode não ter del; apagar vira gravar vazio, e
+// ler vazio conta como ausente.
+const apaga = async k => { if(!store) return;
+  try{ if(store.del) await store.del(k); else await store.set(k,""); }catch(e){} };
+
+/* ---------- várias sessões ----------
+   Cada sessão mora na sua própria chave e só some quando você manda apagar.
+   O índice guarda só o resumo de cada uma, para a lista abrir rápido sem
+   desserializar log de evento nenhum.                                        */
+const IDX="sessao:idx:v1";
+const SKEY = id => "sessao:s:"+id;
+let sid=null, idx=[];
+const novoId = () => Date.now().toString(36)+"-"+Math.floor(Math.random()*1e6).toString(36);
 
 let N=15, goal=0;
 // Três eixos de formato. Cada um vale para a sessão inteira OU fica em aberto
@@ -429,7 +457,7 @@ const TIPOS={prova:true, teste:true, aprendizado:false};
 // escolha contaminada, e o que vier de olhar depois dela sai carimbado.
 let gab={}, gabAberto=null;
 let running=false, segStart=null, sessionAccum=0, sessionStart=null, started=false, curQ=null;
-let exported=false, pending=null, revisando=false;
+let exported=false, revisando=false;
 
 const now=()=>performance.now();
 function fmt(s){ if(s==null||isNaN(s)) return "—";
@@ -535,13 +563,16 @@ function answeredCount(q){
   if(a.tipo==="B") return (a.num&&a.num.length)||a.itens[0].r==="-" ? 1 : 0;
   return a.itens.filter(it=>it.r!==null).length;
 }
-function isComplete(q){
-  const a=ans[q]; if(!a || paramDe(a)==null) return false;   // [].every() é true — guarda necessária
+function completa(a){
+  if(!a || paramDe(a)==null) return false;   // [].every() é true — guarda necessária
   if(a.tipo==="A")  return a.itens.every(it=>it.r!==null);
   if(a.tipo==="ME") return a.itens[0].r!==null;
   return (a.num&&a.num.length>0) || a.itens[0].r==="-";
 }
+function isComplete(q){ return completa(ans[q]); }
+const completasEm = s => Object.keys(s.ans||{}).filter(q=>completa(s.ans[q])).length;
 function paint(){
+  invalidaPags();
   for(let i=1;i<=N;i++){
     const el=document.querySelector('.q[data-q="'+i+'"]'); if(!el) continue;
     const t=qLive(i), has=t>0;
@@ -580,8 +611,10 @@ const fimDe = s => { const m=String(s).match(/\d+/g); return m ? +m[m.length-1] 
 // ocupa 1-2, a Q4 nasce na 3, não na 4. Um passo só, do começo ao fim.
 // pags guarda apenas o que foi digitado; o default nunca é materializado, para
 // que o export consiga dizer o que você conferiu e o que o app deduziu da ordem.
-// Memoizado: paint() consulta a pagina de cada questao, e recalcular a lista
-// inteira por questao daria O(N^2) a cada marcacao.
+// Memoizado dentro de um mesmo desenho: paint() consulta a pagina de cada
+// questao, e recalcular a lista inteira por questao daria O(N^2) a cada
+// marcacao. O cache e derrubado no inicio de paint() e de cada builder de
+// export, entao ele nunca sobrevive a uma mudanca — nao ha como ler valor velho.
 let _pagCache=null;
 const invalidaPags = () => { _pagCache=null; };
 function pagsEfetivas(){
@@ -865,7 +898,7 @@ function snapshot(){
       vis.sec+=d; t[visit.q]=(t[visit.q]||0)+d;
     }
   }
-  return {fmt:3,N,goal,cfgA,cfgME,cfgB,cronometrar,times:t,log,visit:vis,ans,pags,apelidos,ficha,olhar,gab,gabAberto,events,
+  return {fmt:3,nome:nomeBase(),N,goal,cfgA,cfgME,cfgB,cronometrar,times:t,log,visit:vis,ans,pags,apelidos,ficha,olhar,gab,gabAberto,events,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -876,21 +909,34 @@ function flagStore(ok){
   $("nopersist").style.display = ok ? "none" : "block";
   if(!ok) toast("SEM PERSISTÊNCIA — exporte agora");
 }
+function resumoDe(s,id){
+  return {id, nome:s.nome||"", ts:s.ts, N:s.N, questoes:s.N,
+          tipo:(s.ficha&&s.ficha.tipo)||"prova", crono:s.cronometrar!==false,
+          feitas:completasEm(s), aberta:s.visit?s.visit.q:null};
+}
 async function saveNow(){
   clearTimeout(st); st=null;
   if(!store){ flagStore(false); return; }
-  try{ await store.set(KEY, JSON.stringify(snapshot())); flagStore(true); }
-  catch(e){ flagStore(false); }
+  const id=sid;                          // sid pode trocar no meio do await
+  if(!id) return;                        // nada a gravar antes de a sessão existir
+  try{
+    const s=snapshot();
+    await store.set(SKEY(id), JSON.stringify(s));
+    const r=resumoDe(s,id), i=idx.findIndex(x=>x.id===id);
+    if(i<0) idx.unshift(r); else idx[i]=r;
+    await store.set(IDX, JSON.stringify(idx));
+    flagStore(true);
+  }catch(e){ flagStore(false); }
 }
 function save(){ if(st) return; st=setTimeout(saveNow,900); }   // só o que muda continuamente
-async function restore(){ if(!store) return null;
-  try{ const r=await store.get(KEY); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
+async function leSessao(id){ if(!store) return null;
+  try{ const r=await store.get(SKEY(id)); return r&&r.value ? JSON.parse(r.value) : null; }
+  catch(e){ return null; } }
 
 // Aplica um snapshot ao estado vivo. Função nomeada e não trecho solto dentro
 // do boot porque é o caminho mais caro de errar do app inteiro: se ele estiver
 // errado, o prejuízo é uma sessão de estudo, e só se descobre já perdida.
 function retomar(prev){
-  pending=null;
   N=prev.N; goal=prev.goal||0;
   cronometrar = prev.cronometrar!==undefined ? prev.cronometrar : true;
   // fmt 1 guardava nItens/nAlt globais e questões sem alt/dig próprios.
@@ -1140,6 +1186,7 @@ function faixas(ns){
   return out.join(", ");
 }
 function paintRev(){
+  invalidaPags();
   const ps=pendencias();
   const f=ps.filter(p=>p.tipo==="falta"), av=ps.filter(p=>p.tipo==="aviso");
   $("revCount").textContent = f.length+" falta"+(f.length===1?"":"s")+" · "+
@@ -1290,6 +1337,49 @@ const olharList = () => Object.keys(olhar).filter(q=>olhar[q]).map(Number).sort(
 // Em A sai um valor por item, na mesma ordem da coluna itens. Em ME a letra
 // certa. Em B o número — não precisa de coluna separada porque o gabarito não
 // tem confiança para disputar espaço com ele.
+/* ---------- estatísticas ----------
+   Formato longo: uma linha por combinação de tipo × confiança × flags ×
+   resultado, com a contagem. Não cabe na tabela por questão porque o grão é
+   outro, e misturar grãos no mesmo arquivo é o que estraga a análise depois.
+   Combinação que não aparece é zero.                                        */
+const RES={ok:"acerto", erro:"erro", branco:"branco", anulado:"anulado", sem:"sem_gabarito"};
+function estatTidy(){
+  const m=new Map();
+  for(let q=1;q<=N;q++){
+    const a=ans[q]; if(!a || paramDe(a)==null) continue;
+    a.itens.forEach((it,i)=>{
+      // item em branco não tem confiança para declarar — não é chute, é ausência
+      const conf = (it.r===null || it.r==="-") ? "-" : (it.c||"-");
+      const k=[a.tipo, conf, it.T?1:0, it.B?1:0, RES[confere(q,i)]].join("");
+      m.set(k,(m.get(k)||0)+1);
+    });
+  }
+  return [...m.entries()].map(([k,n])=>{
+    const p=k.split("");
+    return {tipo:p[0], confianca:p[1], sem_tempo:+p[2], deixaria_branco:+p[3],
+            resultado:p[4], itens:n};
+  }).sort((a,b)=> a.tipo.localeCompare(b.tipo) || a.resultado.localeCompare(b.resultado)
+               || a.confianca.localeCompare(b.confianca)
+               || a.sem_tempo-b.sem_tempo || a.deixaria_branco-b.deixaria_branco);
+}
+const somaEst = (E,f) => E.filter(f).reduce((s,r)=>s+r.itens,0);
+function buildEstat(){
+  invalidaPags();
+  const E=estatTidy(), L=[];
+  L.push("# gerado_por,app sessao v1");
+  L.push("# sessao,"+csvv(nomeBase()));
+  L.push("# exportado_em,"+iso(Date.now()));
+  L.push("# grao,"+csvv("um registro por combinação de tipo, confiança e flags; combinação ausente = zero"));
+  L.push("# tipo,"+csvv("A = certo/errado · ME = múltipla · B = conta"));
+  L.push("# confianca,"+csvv("c certeza · ? dúvida · x chute · - sem resposta"));
+  L.push("# sem_tempo,"+csvv("1 = item marcado com T, não tive tempo de pensar"));
+  L.push("# deixaria_branco,"+csvv("1 = item marcado com B, deixaria em branco na prova real"));
+  L.push("# resultado,"+csvv("acerto | erro | branco | anulado | sem_gabarito"));
+  L.push("tipo,confianca,sem_tempo,deixaria_branco,resultado,itens");
+  E.forEach(r=>L.push([r.tipo,r.confianca,r.sem_tempo,r.deixaria_branco,r.resultado,r.itens].join(",")));
+  return L.join("\n");
+}
+
 function gabStr(q){
   const a=ans[q], g=gab[q];
   if(!a || !g) return "";
@@ -1302,7 +1392,7 @@ function itemStr(it){
   return it.r + (it.c||"") + (it.B?"B":"") + (it.T?"T":"");
 }
 function buildCSV(){
-  commit(); if(running) segStart=now();
+  invalidaPags(); commit(); if(running) segStart=now();
   // Bloco de metadados só em linhas de comentário. Antes havia um cabeçalho
   // "chave,valor" falso antes delas e o arquivo tinha dois headers — nenhum
   // parser lia isso direto, e o destino do CSV é justamente ser lido por máquina.
@@ -1335,6 +1425,22 @@ function buildCSV(){
   L.push("# itens_em_branco,"+tl.branco);
   L.push("# itens_anulados,"+tl.anulado);
   L.push("# itens_sem_gabarito,"+tl.sem);
+  const E=estatTidy(), sm=f=>somaEst(E,f);
+  const acerto = r=>r.resultado==="acerto", erro = r=>r.resultado==="erro";
+  [["c","certeza"],["?","duvida"],["x","chute"]].forEach(([k,nome])=>{
+    L.push("# acertos_"+nome+","+sm(r=>acerto(r)&&r.confianca===k));
+    L.push("# erros_"+nome+","+sm(r=>erro(r)&&r.confianca===k));
+  });
+  ["A","ME","B"].forEach(tp=>{
+    L.push("# "+tp+"_acertos,"+sm(r=>acerto(r)&&r.tipo===tp));
+    L.push("# "+tp+"_erros,"+sm(r=>erro(r)&&r.tipo===tp));
+    L.push("# "+tp+"_brancos,"+sm(r=>r.resultado==="branco"&&r.tipo===tp));
+  });
+  L.push("# sem_tempo_itens,"+sm(r=>r.sem_tempo===1));
+  L.push("# sem_tempo_acertos,"+sm(r=>r.sem_tempo===1&&acerto(r)));
+  L.push("# sem_tempo_erros,"+sm(r=>r.sem_tempo===1&&erro(r)));
+  L.push("# sem_tempo_brancos,"+sm(r=>r.sem_tempo===1&&r.resultado==="branco"));
+  L.push("# estatisticas_completas_em,"+csvv(nomeBase()+"_estatisticas.csv"));
   L.push("# pag_auto,"+csvv("1 = a pagina veio da ordem das questoes, nao foi conferida"));
   const ef=pagsEfetivas();
   L.push("# apelido,"+csvv("nome da questao; sem apelido, e a pagina a que ela se refere"));
@@ -1355,7 +1461,7 @@ function buildCSV(){
   return L.join("\n");
 }
 function buildJSONL(){
-  commit(); if(running) segStart=now();   // a passada viva também entra fechada no arquivo
+  invalidaPags(); commit(); if(running) segStart=now();   // a passada viva também entra fechada no arquivo
   const all=log.concat(visit?[visit]:[]);
   const rows=all.map((v,i)=>({t:iso(v.at),ev:"passada",ordem:i+1,q:v.q,seg:sec1(v.sec),
                               truncada:v.trunc?true:undefined}))
@@ -1370,7 +1476,8 @@ function buildJSONL(){
     itens_da_prova:ficha.itens?+ficha.itens:null, itens_julgaveis_no_set:itensDoSet(),
     olhar:olharList(), pags:Object.assign({},pags), apelidos:Object.assign({},apelidos),
     pags_efetivas:pagsEfetivas(),
-    gabarito_visto_em:gabAberto, gabarito:Object.assign({},gab), conferencia:tally()};
+    gabarito_visto_em:gabAberto, gabarito:Object.assign({},gab), conferencia:tally(),
+    estatisticas:estatTidy()};
   return [meta].concat(rows).map(o=>JSON.stringify(o)).join("\n");
 }
 function dl(name,txt,mime){
@@ -1382,9 +1489,10 @@ function doExport(){
   learnVocab();
   const base=nomeBase();
   dl(base+".csv","\ufeff"+buildCSV(),"text/csv");
-  setTimeout(()=>dl(base+"_eventos.jsonl",buildJSONL(),"application/x-ndjson"),350);
+  setTimeout(()=>dl(base+"_estatisticas.csv","\ufeff"+buildEstat(),"text/csv"),350);
+  setTimeout(()=>dl(base+"_eventos.jsonl",buildJSONL(),"application/x-ndjson"),700);
   exported=true;
-  toast("CSV + trilha exportados");
+  toast("CSV + estatísticas + trilha exportados");
 }
 $("expBtn").onclick=openEnd;
 $("endExp").onclick=()=>{
@@ -1395,6 +1503,56 @@ $("endExp").onclick=()=>{
 };
 let tt;
 function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("on"); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove("on"),1500); }
+
+/* ---------- lista de sessões ---------- */
+const dataCurta = ts => new Date(ts).toLocaleString("pt-BR",
+  {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+function pintaSessoes(){
+  const box=$("sessBox"), el=$("sessList");
+  box.style.display = idx.length ? "flex" : "none";
+  el.innerHTML="";
+  idx.slice().sort((a,b)=>b.ts-a.ts).forEach(r=>{
+    const d=document.createElement("div");
+    d.className="srow"+(r.id===sid?" viva":"");
+    const info=document.createElement("div"); info.className="sinfo";
+    const b=document.createElement("b"); b.textContent=r.nome||"(sem identificação)";
+    const s=document.createElement("span");
+    s.textContent=dataCurta(r.ts)+" · "+r.feitas+"/"+r.questoes+" respondidas"+
+      (r.crono?"":" · sem relógio")+(r.aberta?" · interrompida na Q"+r.aberta:"");
+    if(r.aberta) s.className="aberta";
+    info.appendChild(b); info.appendChild(s);
+    d.appendChild(info);
+    const ab=document.createElement("button");
+    ab.textContent = r.id===sid ? "Atual" : "Abrir";
+    ab.disabled = r.id===sid;
+    ab.onclick=()=>abreSessao(r.id);
+    d.appendChild(ab);
+    const del=document.createElement("button");
+    del.className="del"; del.textContent="✕"; del.title="Excluir esta sessão";
+    del.onclick=()=>excluiSessao(r.id, r.nome);
+    d.appendChild(del);
+    el.appendChild(d);
+  });
+}
+async function abreSessao(id){
+  const s=await leSessao(id);
+  if(!s){ toast("sessão não encontrada"); return; }
+  await saveNow();                       // fecha a atual antes de trocar
+  sid=id; retomar(s); pintaSessoes();
+}
+async function excluiSessao(id, nome){
+  if(!confirm("Excluir \""+(nome||"sessão")+"\"? Não há como desfazer.")) return;
+  await apaga(SKEY(id));
+  idx=idx.filter(x=>x.id!==id);
+  if(store) try{ await store.set(IDX, JSON.stringify(idx)); }catch(e){}
+  if(id===sid){                          // apagou a que estava aberta
+    sid=null; started=false; setRunning(false); sairRev(); closeEnd();
+    times={}; log=[]; visit=null; ans={}; pags={}; apelidos={}; events=[];
+    olhar={}; gab={}; gabAberto=null; curQ=null; invalidaPags();
+    $("setup").classList.remove("hide");
+  }
+  pintaSessoes(); toast("sessão excluída");
+}
 
 /* ---------- eventos de UI ---------- */
 $("toggle").onclick=()=>{ if(!visit) return; setRunning(!running); };
@@ -1410,16 +1568,20 @@ document.querySelectorAll("#typeRow button").forEach(b=>b.onclick=()=>{
   if(ans[curQ] && ans[curQ].tipo!==t && !confirm("Trocar o tipo apaga as marcações desta questão. Continuar?")) return;
   ans[curQ]=blankAns(t); ev({ev:"tipo",q:curQ,tipo:t}); renderQ(); paint(); save();
 });
-// Só existe um slot de storage: começar outra sessão apaga esta. Se ela ainda
-// não foi exportada, o aviso precisa dizer isso com todas as letras.
-function podeDescartar(){
-  if(!started) return true;
-  return confirm(exported
-    ? "Encerrar esta sessão e começar outra?"
-    : "Esta sessão NÃO foi exportada e não há como recuperá-la depois. Descartar mesmo assim?");
-}
-$("newBtn").onclick=()=>{ if(!podeDescartar()) return;
-  setRunning(false); sairRev(); closeEnd(); $("setup").classList.remove("hide"); started=false; };
+// Cada sessão tem chave própria, então começar outra não apaga esta — ela fica
+// na lista até você mandar excluir. Não há mais nada a confirmar aqui.
+$("newBtn").onclick=()=>{
+  setRunning(false); sairRev(); closeEnd();
+  // Desanexa na mesma batida: sem isso, digitar a identificação da sessão nova
+  // ainda escreveria na anterior, renomeando-a no índice. saveNow captura o id
+  // e o snapshot de forma síncrona, então zerar sid aqui não atrapalha a
+  // gravação que acabou de sair — e não deixa janela nenhuma aberta.
+  saveNow();
+  sid=null; started=false;
+  $("startBtn").textContent="Começar"; $("setup").classList.remove("editando");
+  paintApelidos(); pintaSessoes();
+  $("setup").classList.remove("hide"); $("setup").scrollTop=0;
+};
 
 const EIXOS=[["A","segA",v=>cfgA=v,()=>cfgA],["ME","segME",v=>cfgME=v,()=>cfgME],
              ["B","segB",v=>cfgB=v,()=>cfgB]];
@@ -1451,8 +1613,7 @@ $("startBtn").onclick=()=>{
   }
   const n=parseInt($("nIn").value,10);
   if(!n||n<1||n>300){ $("nIn").focus(); return; }
-  if(pending && !confirm("Há uma sessão guardada que será apagada. Começar do zero mesmo assim?")) return;
-  pending=null;
+  sid=novoId();          // sessão nova é chave nova: nada é sobrescrito
   const g=parseFloat(String($("goalIn").value).replace(",","."));
   N=n; goal = g>0 ? g*60 : 0;
   times={}; log=[]; visit=null; ans={}; pags={}; events=[]; sessionAccum=0; sessionStart=null; running=false;
@@ -1466,8 +1627,8 @@ $("startBtn").onclick=()=>{
     materia:ficha.mat, subtopico:ficha.sub, fonte:ficha.fonte,
     ce_itens:eixo(cfgA), me_alternativas:eixo(cfgME), conta_digitos:eixo(cfgB)});
   pintaTipo(); pintaNome();
-  buildGrid(); paint(); save(); showPane("paneGrid");
-  closeEnd(); $("setup").classList.add("hide");
+  buildGrid(); paint(); saveNow(); showPane("paneGrid");
+  closeEnd(); $("setup").classList.add("hide"); pintaSessoes();
 };
 
 document.addEventListener("keydown",e=>{
@@ -1482,25 +1643,25 @@ FICHA.forEach(([k,el])=>$(el).value=ficha[k]||"");
 $("mData").value=ficha.data;
 pintaTipo(); pintaNome(); paintApelidos();
 
+// A versão anterior guardava tudo numa chave só. Se ela existir, vira a
+// primeira sessão da lista em vez de ser perdida.
+async function migraChaveAntiga(){
+  if(!store) return;
+  let old=null;
+  try{ const r=await store.get(KEY); old=r&&r.value?JSON.parse(r.value):null; }catch(e){}
+  if(!old || !old.N) return;
+  const id=novoId();
+  old.nome=old.nome||"sessao-anterior";
+  try{ await store.set(SKEY(id), JSON.stringify(old)); }catch(e){ return; }
+  idx.unshift(resumoDe(old,id));
+  try{ await store.set(IDX, JSON.stringify(idx)); }catch(e){}
+  await apaga(KEY);
+}
 (async()=>{
   await loadVocab();
-  const prev=await restore();
-  if(prev && (Object.keys(prev.times||{}).length || (prev.log&&prev.log.length))){
-    pending=prev;
-    const when=new Date(prev.ts||Date.now()).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-    const note=$("resumeNote");
-    const aberta = prev.visit && prev.running
-      ? ' A questão '+prev.visit.q+' estava aberta com '+fmt(prev.visit.sec)+
-        ' medidos até o último registro; o tempo depois disso não foi medido e não entra.'
-      : '';
-    note.style.display="block";
-    note.innerHTML='Há uma sessão de '+when+' com '+prev.N+' questões.'+aberta+
-      ' <a href="#" id="resumeLink" style="color:var(--brass)">Retomar</a>';
-    $("nIn").value=prev.N;
-    if(prev.goal) $("goalIn").value=prev.goal/60;
-
-    $("resumeLink").onclick=e=>{ e.preventDefault(); retomar(prev); };
-  }
+  if(store){ try{ idx=JSON.parse((await store.get(IDX)).value)||[]; }catch(e){ idx=[]; } }
+  await migraChaveAntiga();
+  pintaSessoes();
 })();
 tick();
 

@@ -536,6 +536,167 @@ EQ("apelido sai como segunda coluna",
 EQ("o jsonl leva os apelidos digitados",
    JSON.parse(buildJSONL().split("\n")[0]).apelidos, { 1: "ANPEC14 Q5", 3: "BACEN22 Q10" });
 
+/* ---- cenário 9: várias sessões guardadas ---- */
+// Este cenário mexe em disco de verdade: limpa e trabalha do zero.
+// Os cenários acima disparam saveNow() sem await; as continuações só drenariam
+// no primeiro await daqui, depois da limpeza, e ressuscitariam o índice.
+// Fica em microtask de propósito: um setTimeout cairia depois do load e o
+// --dump-dom perderia o resto do relatório.
+const drena = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+await drena();
+Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
+idx = []; sid = null;
+
+const nomes = () => idx.slice().sort((a, b) => b.ts - a.ts).map(r => r.nome);
+
+clicaTipo("prova");
+$("mData").value = "2026-08-02"; $("mData").dispatchEvent(new Event("change"));
+$("mConc").value = "ANPEC"; $("mConc").dispatchEvent(new Event("change"));
+$("mMat").value = "Micro"; $("mMat").dispatchEvent(new Event("change"));
+$("mFonte").value = ""; $("mFonte").dispatchEvent(new Event("change"));
+$("nIn").value = "3"; apelidos = {}; paintApelidos();
+$("startBtn").click();
+const sid1 = sid;
+select(1); adv(60000);
+document.querySelector('#typeRow button[data-t="ME"]').click();
+[...document.querySelectorAll("#answerArea .opts button")].find(b => b.textContent === "Ac").click();
+await saveNow(); await drena();
+EQ("a sessao entrou no indice", nomes(), ["20260802_anpec_micro_prova"]);
+EQ("com o progresso no resumo", idx[0].feitas, 1);
+EQ("e ficou gravada na propria chave",
+   !!localStorage.getItem("sessao:s:" + sid1), true);
+
+// começar outra NÃO apaga a primeira
+$("newBtn").click();
+$("mMat").value = "Macro"; $("mMat").dispatchEvent(new Event("change"));
+$("nIn").value = "2"; paintApelidos();
+$("startBtn").click();
+const sid2 = sid;
+EQ("a nova sessao tem id proprio", sid2 !== sid1, true);
+select(1); adv(30000);
+await saveNow(); await drena();
+EQ("as duas convivem no indice", nomes().length, 2);
+EQ("a mais recente primeiro", nomes()[0], "20260802_anpec_macro_prova");
+EQ("e a primeira segue intacta no disco",
+   JSON.parse(localStorage.getItem("sessao:s:" + sid1)).N, 3);
+
+// voltar para a primeira recupera tudo
+await abreSessao(sid1); await drena();
+EQ("voltou para a sessao antiga", sid, sid1);
+EQ("com o numero de questoes dela", N, 3);
+EQ("e as marcacoes dela", ans[1] && ans[1].itens[0].r, "A");
+NEAR("e o tempo dela", times[1], 60, 0.1);
+EQ("a linha da sessao aberta vem marcada",
+   $("sessList").querySelector(".srow.viva").querySelector("b").textContent,
+   "20260802_anpec_micro_prova");
+
+// excluir a que não está aberta
+window.__confirmYes = false;
+await excluiSessao(sid2, "macro");
+EQ("recusar a confirmacao nao apaga", nomes().length, 2);
+window.__confirmYes = true;
+await excluiSessao(sid2, "macro"); await drena();
+EQ("excluida some do indice", nomes(), ["20260802_anpec_micro_prova"]);
+EQ("e some do disco", localStorage.getItem("sessao:s:" + sid2), null);
+EQ("a que ficou nao foi tocada", sid, sid1);
+
+// excluir a que está aberta devolve o app ao setup, sem sessão
+await excluiSessao(sid1, "micro"); await drena();
+EQ("indice vazio", idx.length, 0);
+EQ("nenhuma sessao aberta", sid, null);
+EQ("estado limpo", [started, log.length, Object.keys(ans).length], [false, 0, 0]);
+EQ("a caixa da lista some quando nao ha nada",
+   $("sessBox").style.display, "none");
+EQ("gravar sem sessao aberta nao recria nada",
+   (await saveNow(), Object.keys(localStorage).filter(k => k.startsWith("sessao:s:")).length), 0);
+
+// migração da chave única antiga
+localStorage.setItem("sessao:v1", JSON.stringify({
+  fmt: 2, N: 7, times: { 1: 42 }, log: [], ans: {}, events: [], ts: 1780000000000,
+  ficha: { tipo: "teste", mat: "Antiga" }
+}));
+idx = [];
+await migraChaveAntiga();
+EQ("a chave antiga virou sessao na lista", idx.length, 1);
+EQ("com as questoes que ela tinha", idx[0].questoes, 7);
+EQ("e a chave antiga foi embora", localStorage.getItem("sessao:v1"), null);
+const antiga = await leSessao(idx[0].id);
+EQ("o conteudo veio junto", antiga.times[1], 42);
+
+/* ---- cenário 10: estatísticas de calibragem ---- */
+Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
+idx = []; sid = null;
+clicaTipo("prova");
+$("mConc").value = "ANPEC"; $("mConc").dispatchEvent(new Event("change"));
+$("mMat").value = "Calib"; $("mMat").dispatchEvent(new Event("change"));
+$("mFonte").value = ""; $("mFonte").dispatchEvent(new Event("change"));
+cfgA = 4; cfgME = 5; cfgB = 2; pintaEixos();
+$("nIn").value = "3"; apelidos = {}; paintApelidos();
+$("startBtn").click();
+
+// tipo A, 4 itens: acerto com certeza, erro com chute, branco, acerto com dúvida sem tempo
+select(1); ans[1] = blankAns("A");
+ans[1].itens[0] = { r: "V", c: "c", B: false, T: false };
+ans[1].itens[1] = { r: "F", c: "x", B: false, T: false };
+ans[1].itens[2] = { r: "-", c: null, B: false, T: false };
+ans[1].itens[3] = { r: "V", c: "?", B: true,  T: true  };
+// múltipla: erro com dúvida, sem tempo
+select(2); ans[2] = blankAns("ME"); ans[2].itens[0] = { r: "C", c: "?", B: false, T: true };
+// conta: acerto com certeza
+select(3); ans[3] = blankAns("B"); ans[3].dig = 2; ans[3].num = "42";
+ans[3].itens[0] = { r: "42", c: "c", B: false, T: false };
+setRunning(false);
+
+gab[1] = { itens: ["V", "V", "F", "V"], num: "" };   // item2 diverge, item3 era F
+gab[2] = { itens: ["A"], num: "" };                   // marcou C, era A
+gab[3] = { itens: [null], num: "42" };
+
+const linha = (tp, cf, t_, b_, res) => estatTidy()
+  .filter(r => r.tipo === tp && r.confianca === cf && r.sem_tempo === t_ &&
+               r.deixaria_branco === b_ && r.resultado === res)
+  .reduce((s, r) => s + r.itens, 0);
+
+EQ("acerto com certeza em C/E", linha("A", "c", 0, 0, "acerto"), 1);
+EQ("erro com chute em C/E", linha("A", "x", 0, 0, "erro"), 1);
+EQ("branco nao carrega confianca", linha("A", "-", 0, 0, "branco"), 1);
+EQ("acerto com duvida, sem tempo e marcado B",
+   linha("A", "?", 1, 1, "acerto"), 1);
+EQ("erro com duvida em multipla, sem tempo", linha("ME", "?", 1, 0, "erro"), 1);
+EQ("acerto com certeza em conta", linha("B", "c", 0, 0, "acerto"), 1);
+EQ("nenhuma combinacao zerada e emitida",
+   estatTidy().every(r => r.itens > 0), true);
+EQ("total de itens bate com a folha",
+   estatTidy().reduce((s, r) => s + r.itens, 0), 6);
+
+const est = buildEstat().split("\n");
+EQ("o arquivo de estatisticas tem cabecalho proprio",
+   est.find(l => l.startsWith("tipo,")),
+   "tipo,confianca,sem_tempo,deixaria_branco,resultado,itens");
+EQ("e so linhas de comentario antes dele",
+   est.slice(0, est.indexOf(est.find(l => l.startsWith("tipo,")))).every(l => l.startsWith("#")), true);
+EQ("uma linha por combinacao ocorrida",
+   est.length - est.indexOf(est.find(l => l.startsWith("tipo,"))) - 1, estatTidy().length);
+
+const h10 = buildCSV().split("\n").filter(l => l.startsWith("#"));
+const val = k => (h10.find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];
+EQ("o resumo do csv principal traz os acertos por confianca",
+   [val("acertos_certeza"), val("acertos_duvida"), val("acertos_chute")], ["2", "1", "0"]);
+EQ("e os erros por confianca",
+   [val("erros_certeza"), val("erros_duvida"), val("erros_chute")], ["0", "1", "1"]);
+EQ("segmentado por tipo",
+   [val("A_acertos"), val("A_erros"), val("A_brancos"),
+    val("ME_acertos"), val("ME_erros"), val("B_acertos")], ["2", "1", "1", "0", "1", "1"]);
+EQ("e o eixo da falta de tempo",
+   [val("sem_tempo_itens"), val("sem_tempo_acertos"),
+    val("sem_tempo_erros"), val("sem_tempo_brancos")], ["2", "1", "1", "0"]);
+EQ("o jsonl tambem leva as estatisticas",
+   JSON.parse(buildJSONL().split("\n")[0]).estatisticas.length, estatTidy().length);
+
+doExport();
+EQ("o export sai com tres arquivos", window.__files.map(f => f.name.replace(/^[^_]*_/, "")),
+   ["anpec_calib_prova.csv", "anpec_calib_prova_estatisticas.csv",
+    "anpec_calib_prova_eventos.jsonl"].slice(0, window.__files.length));
+
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +
   [...new Set(events.map(e => e.ev))].join(" "));

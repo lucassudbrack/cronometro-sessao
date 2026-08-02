@@ -11,6 +11,19 @@ prova aberto no tablet e o app numa janela flutuante ao lado.
 
 Sem backend, sem dependências, sem telemetria. Todo o dado fica no aparelho.
 
+## Sessões
+
+Cada sessão fica guardada no aparelho, na sua própria chave, e só some quando
+você manda excluir. A lista aparece no topo da tela inicial. O nome é montado
+sozinho a partir da identificação e serve de nome de arquivo e de apelido:
+
+    aaaammdd_concurso_materia_tiposessao_fonte
+
+**Tipo de sessão** decide se corre o relógio: *prova* e *teste* correm,
+*aprendizado* não. Sem relógio, as passadas e as marcações continuam sendo
+registradas e o tempo sai **vazio** no export — zero afirmaria que a questão
+levou zero segundo.
+
 ## Usar
 
 Abra a página, instale como app (o navegador oferece "instalar" ou "adicionar à
@@ -33,7 +46,12 @@ ans[q] = {
 }
 pags[q] = "7-8"                 // página do caderno, número ou intervalo
 gab[q]  = { itens: ["V","F","X"], num: "042" }   // gabarito · X = anulada
+apelidos[q] = "ANPEC14 Q5"       // nome da questão; sem apelido, vale a página
 ```
+
+A **página** default é cumulativa: uma por questão, na ordem, e um intervalo
+desloca as seguintes. Só o que você digita é guardado, então o export distingue
+página conferida de página deduzida.
 
 O formato tem três eixos — itens de C/E, alternativas de múltipla, dígitos de
 conta. Cada um é fixado no setup ou fica **na hora**, e aí a questão declara o
@@ -66,9 +84,9 @@ seu ao ser aberta. O tipo nunca é decidido no setup.
 
 ## Saída
 
-Dois arquivos. O primário é o segundo.
+Três arquivos. O primário é o último.
 
-`sessao-<stamp>.csv` — resumo, uma linha por questão:
+`<nome>.csv` — uma linha por questão:
 
 ```
 # materia,Estatística
@@ -79,13 +97,25 @@ q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito
 9,B,3,"c",42,201,03:21,1,12,,"042"
 ```
 
+`<nome>_estatisticas.csv` — formato longo, uma linha por combinação de tipo ×
+confiança × flags × resultado, com a contagem. Grão diferente do arquivo acima,
+por isso arquivo separado; combinação ausente é zero. O bloco `#` do CSV
+principal repete os totais, para o caso de o terceiro download falhar.
+
+```
+tipo,confianca,sem_tempo,deixaria_branco,resultado,itens
+A,c,0,0,acerto,12
+A,x,0,0,erro,3
+ME,?,1,0,erro,1
+```
+
 O bloco de metadados são linhas de comentário `#` — leia com
 `pandas.read_csv(f, comment="#")`. No tipo B a resposta vai em `numerica` e a
 coluna `itens` carrega a confiança e as flags daquele item. `param` é o nº de
 itens em A, de alternativas em ME, de dígitos em B. `gabarito` usa o mesmo
 alfabeto de `itens`, com `X` para anulada e vazio para sem gabarito.
 
-`eventos-<stamp>.jsonl` — log append-only, cronológico, uma linha por evento
+`<nome>_eventos.jsonl` — log append-only, cronológico, uma linha por evento
 (`meta`, `passada`, `enter`, `leave`, `mark`, `flag`, `pag`, `ficha`, `olhar`,
 `pause`, `resume`, `recover`). É o lastro: o CSV é derivado dele. Todo evento
 discreto é gravado em disco no toque, mais um heartbeat de 5 s enquanto o
