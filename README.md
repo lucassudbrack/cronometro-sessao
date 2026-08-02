@@ -92,9 +92,9 @@ Três arquivos. O primário é o último.
 # materia,Estatística
 # fonte,ANPEC 2014
 # itens_conferem,2
-q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito
-1,A,5,"Vc F? Vc - FxB",,384,06:24,2,7-8,1,"V F V X F"
-9,B,3,"c",42,201,03:21,1,12,,"042"
+q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito
+1,ANPEC14 Q5,A,5,"Vc F? Vc - FxB",,384,06:24,2,7-8,,1,"V F V X F"
+9,9,B,3,"c",42,201,03:21,1,12,1,,"042"
 ```
 
 `<nome>_estatisticas.csv` — formato longo, uma linha por combinação de tipo ×
