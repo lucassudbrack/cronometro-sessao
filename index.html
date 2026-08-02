@@ -70,6 +70,12 @@
   .typerow{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:12px}
   .typerow button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
 
+  .pagrow{display:flex; align-items:center; gap:8px; margin-bottom:12px}
+  .pagrow .eyebrow{flex:0 0 auto}
+  .pagrow input{flex:1; min-width:0; padding:7px 8px; font-size:12px; text-align:center; letter-spacing:.08em}
+  .pagrow input.odd{border-color:var(--brass)}
+  .pagrow button{flex:0 0 34px; padding:8px 0; font-family:var(--mono); font-size:13px}
+
   .item{border:1px solid var(--line); border-radius:4px; padding:7px; margin-bottom:6px; background:var(--chassis-2)}
   .itemlab{font-family:var(--mono); font-size:10px; color:var(--mute); margin-bottom:5px; display:flex; gap:8px; align-items:center}
   .opts{display:flex; gap:3px}
@@ -142,6 +148,11 @@
     <button data-t="ME">Múltipla</button>
     <button data-t="B">Conta</button>
   </div>
+  <div class="pagrow">
+    <span class="eyebrow">Pág. do caderno</span>
+    <input id="pagIn" placeholder="7 ou 7-8" autocomplete="off" spellcheck="false" enterkeyhint="done">
+    <button id="pagSame" title="Repetir a página da questão anterior">↑</button>
+  </div>
   <div id="answerArea"></div>
 </div>
 
@@ -196,6 +207,9 @@ const store = (typeof window!=="undefined" && window.storage) ? window.storage :
 
 let N=15, goal=0, nItens=5, nAlt=5, tag="";
 let times={}, log=[], visit=null, ans={}, events=[];
+// pags vive fora de ans de propósito: a página do caderno é fato físico da sessão,
+// não parte da resposta. Trocar o tipo da questão zera ans[q] e não pode levar a página junto.
+let pags={};
 let running=false, segStart=null, sessionAccum=0, sessionStart=null, started=false, curQ=null;
 
 const now=()=>performance.now();
@@ -308,10 +322,39 @@ function paint(){
   if($("paneLog").classList.contains("on")) paintLog();
 }
 
+/* ---------- pagina do caderno ---------- */
+// Forma esperada: 7, 7-8, 7,9. Fora disso não bloqueia — o caderno é seu —
+// só acende a borda, que é o suficiente para pegar um dedo errado.
+const pagOK = s => !s || /^\d+([-,]\d+)*$/.test(s);
+const pagNorm = s => s.replace(/\s+/g,"").replace(/[–—]/g,"-");
+function paintPag(){
+  const v = pags[curQ]||"";
+  if($("pagIn").value!==v) $("pagIn").value=v;
+  $("pagIn").classList.toggle("odd", !pagOK(v));
+}
+function setPag(v, fromInput){
+  const s=pagNorm(v);
+  if((pags[curQ]||"")===s) return;
+  if(s) pags[curQ]=s; else delete pags[curQ];
+  if(!fromInput) paintPag(); else $("pagIn").classList.toggle("odd", !pagOK(s));
+}
+$("pagIn").addEventListener("input", e=>{ setPag(e.target.value, true); save(); });
+$("pagIn").addEventListener("change", e=>{
+  setPag(e.target.value, false);
+  ev({ev:"pag", q:curQ, pag:pags[curQ]||null});
+});
+$("pagIn").addEventListener("keydown", e=>{ if(e.key==="Enter") e.target.blur(); });
+$("pagSame").onclick=()=>{
+  for(let p=curQ-1;p>=1;p--) if(pags[p]){ setPag(pags[p], false);
+    ev({ev:"pag", q:curQ, pag:pags[curQ], de:p}); return; }
+  toast("nenhuma página anterior preenchida");
+};
+
 /* ---------- painel de resposta ---------- */
 function renderQ(){
   const q=curQ;
   $("badge").textContent=q;
+  paintPag();
   document.querySelectorAll("#typeRow button").forEach(b=>
     b.classList.toggle("sel", ans[q] && ans[q].tipo===b.dataset.t));
   const area=$("answerArea");
@@ -440,15 +483,15 @@ function tick(){
    truncada e o tempo desconhecido fica de fora.                                  */
 function snapshot(){
   const t=Object.assign({},times);
-  let v=null;
+  let vis=null;
   if(visit){
-    v=Object.assign({},visit);
+    vis=Object.assign({},visit);
     if(running && segStart!==null){
       const d=(now()-segStart)/1000;
-      v.sec+=d; t[visit.q]=(t[visit.q]||0)+d;
+      vis.sec+=d; t[visit.q]=(t[visit.q]||0)+d;
     }
   }
-  return {v:1,N,goal,nItens,nAlt,tag,times:t,log,visit:v,ans,events,
+  return {fmt:1,N,goal,nItens,nAlt,tag,times:t,log,visit:vis,ans,pags,events,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -493,14 +536,14 @@ function buildCSV(){
   L.push("# alternativas_me,"+nAlt);
   L.push("# duracao_total,"+fmt(sessionLive()));
   L.push("# gerado_por,app sessao v1");
-  L.push("q,tipo,itens,numerica,segundos,mmss,passadas");
+  L.push("q,tipo,itens,numerica,segundos,mmss,passadas,pag");
   for(let q=1;q<=N;q++){
     const a=ans[q]; const t=times[q]||0;
-    if(!a && !t) continue;
+    if(!a && !t && !pags[q]) continue;
     const tipo=a?a.tipo:"";
     const itens = a && a.tipo!=="B" ? a.itens.map(itemStr).join(" ").trim() : (a?itemStr(a.itens[0]).replace(/^[0-9]+/,""):"");
     const num = a && a.tipo==="B" ? (a.num||(a.itens[0].r==="-"?"-":"")) : "";
-    L.push([q,tipo,'"'+itens+'"',num,Math.round(t),fmt(t),passes(q)].join(","));
+    L.push([q,tipo,'"'+itens+'"',num,Math.round(t),fmt(t),passes(q),'"'+(pags[q]||"")+'"'].join(","));
   }
   return L.join("\n");
 }
@@ -556,7 +599,7 @@ $("startBtn").onclick=()=>{
   if(!n||n<1||n>300){ $("nIn").focus(); return; }
   const g=parseFloat(String($("goalIn").value).replace(",","."));
   N=n; goal = g>0 ? g*60 : 0; tag=$("tagIn").value.trim();
-  times={}; log=[]; visit=null; ans={}; events=[]; sessionAccum=0; sessionStart=null; running=false;
+  times={}; log=[]; visit=null; ans={}; pags={}; events=[]; sessionAccum=0; sessionStart=null; running=false;
   document.body.classList.remove("running","paused"); $("toggle").textContent="Pausar";
   started=true; ev({ev:"start",questoes:N,itens_ce:nItens,alternativas_me:nAlt,rotulo:tag});
   buildGrid(); paint(); save(); showPane("paneGrid");
@@ -590,6 +633,7 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden && runnin
       e.preventDefault();
       N=prev.N; goal=prev.goal||0; nItens=prev.nItens||5; nAlt=prev.nAlt||5; tag=prev.tag||"";
       times=prev.times||{}; log=prev.log||[]; ans=prev.ans||{}; events=prev.events||[];
+      pags=prev.pags||{};
       if(prev.visit){
         // A passada que estava aberta virou passada fechada, com o valor medido até
         // o último registro. trunc diz que esse número é piso, não medida completa.
