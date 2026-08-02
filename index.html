@@ -122,6 +122,7 @@
   .pagrow .eyebrow{flex:0 0 auto}
   .pagrow input{flex:1; min-width:0; padding:7px 8px; font-size:12px; text-align:center; letter-spacing:.08em}
   .pagrow input.odd{border-color:var(--brass)}
+  .pagrow input.auto{color:var(--dim)}
   .pagrow button{flex:0 0 34px; padding:8px 0; font-family:var(--mono); font-size:13px}
 
   .item{border:1px solid var(--line); border-radius:4px; padding:7px; margin-bottom:6px; background:var(--chassis-2)}
@@ -507,10 +508,26 @@ function paint(){
 // só acende a borda, que é o suficiente para pegar um dedo errado.
 const pagOK = s => !s || /^\d+([-,]\d+)*$/.test(s);
 const pagNorm = s => s.replace(/\s+/g,"").replace(/[–—]/g,"-");
+const fimDe = s => { const m=String(s).match(/\d+/g); return m ? +m[m.length-1] : null; };
+// Regra: uma página por questão, na ordem. O default é cumulativo — se a Q3
+// ocupa 1-2, a Q4 nasce na 3, não na 4. Um passo só, do começo ao fim.
+// pags guarda apenas o que foi digitado; o default nunca é materializado, para
+// que o export consiga dizer o que você conferiu e o que o app deduziu da ordem.
+function pagsEfetivas(){
+  const out={}; let prox=1;
+  for(let q=1;q<=N;q++){
+    out[q] = pags[q] ? {v:pags[q], auto:false} : {v:String(prox), auto:true};
+    const f=fimDe(out[q].v);
+    prox = f!=null ? f+1 : prox+1;
+  }
+  return out;
+}
+const pagEf = q => pagsEfetivas()[q] || {v:String(q), auto:true};
 function paintPag(){
-  const v = pags[curQ]||"";
-  if($("pagIn").value!==v) $("pagIn").value=v;
-  $("pagIn").classList.toggle("odd", !pagOK(v));
+  const p=pagEf(curQ), el=$("pagIn");
+  if(el.value!==p.v) el.value=p.v;
+  el.classList.toggle("odd", !pagOK(p.v));
+  el.classList.toggle("auto", p.auto);      // cinza enquanto vem da ordem
 }
 function setPag(v, fromInput){
   const s=pagNorm(v);
@@ -524,10 +541,12 @@ $("pagIn").addEventListener("change", e=>{
   ev({ev:"pag", q:curQ, pag:pags[curQ]||null});
 });
 $("pagIn").addEventListener("keydown", e=>{ if(e.key==="Enter") e.target.blur(); });
+// "mesma da anterior": copia a pagina efetiva da questao de cima, virando
+// declaracao explicita — util quando duas questoes dividem a mesma folha.
 $("pagSame").onclick=()=>{
-  for(let p=curQ-1;p>=1;p--) if(pags[p]){ setPag(pags[p], false);
-    ev({ev:"pag", q:curQ, pag:pags[curQ], de:p}); return; }
-  toast("nenhuma página anterior preenchida");
+  if(curQ<=1){ toast("não há questão anterior"); return; }
+  setPag(pagEf(curQ-1).v, false);
+  ev({ev:"pag", q:curQ, pag:pags[curQ], de:curQ-1});
 };
 
 /* ---------- painel de resposta ---------- */
@@ -967,8 +986,19 @@ function pendencias(){
       else if(a.itens[0].r!=="-" && !a.itens[0].c) add(q,"falta","sem confiança");
     }
     if(a && t===0) add(q,"aviso","marcada sem tempo registrado");
-    if(!pags[q]) add(q,"aviso","sem página do caderno");
+
     if(log.some(v=>v.q===q&&v.trunc)) add(q,"aviso","tempo truncado por crash — é piso, não medida");
+  }
+  return out;
+}
+// As paginas que vieram da ordem viram um aviso so. Uma linha por questao
+// afogaria a lista, ja que por padrao quase todas vem do default.
+function pagsAuto(){
+  const ef=pagsEfetivas(), out=[];
+  for(let q=1;q<=N;q++){
+    const a=ans[q];
+    if(!a && !(times[q]||0) && !olhar[q]) continue;
+    if(ef[q] && ef[q].auto) out.push(q);
   }
   return out;
 }
@@ -1007,6 +1037,10 @@ function paintRev(){
   const naoVis=av.filter(p=>p.txt==="não visitada").map(p=>p.q);
   f.forEach(p=>linha("Q"+p.q,"falta",p.txt,p.q));
   av.filter(p=>p.txt!=="não visitada").forEach(p=>linha("Q"+p.q,"aviso",p.txt,p.q));
+  const auto=pagsAuto();
+  if(auto.length) linha("—","aviso",
+    auto.length+(auto.length===1?" página veio da ordem, não conferida: "
+                                :" páginas vieram da ordem, não conferidas: ")+faixas(auto), null);
   if(naoVis.length) linha("—","aviso",
     naoVis.length+" não visitadas: "+faixas(naoVis), null);
 }
@@ -1130,7 +1164,9 @@ function buildCSV(){
   L.push("# itens_em_branco,"+tl.branco);
   L.push("# itens_anulados,"+tl.anulado);
   L.push("# itens_sem_gabarito,"+tl.sem);
-  L.push("q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito");
+  L.push("# pag_auto,"+csvv("1 = a pagina veio da ordem das questoes, nao foi conferida"));
+  const ef=pagsEfetivas();
+  L.push("q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito");
   for(let q=1;q<=N;q++){
     const a=ans[q]; const t=times[q]||0;
     if(!a && !t && !pags[q] && !olhar[q]) continue;
@@ -1138,7 +1174,7 @@ function buildCSV(){
     const itens = a && a.tipo!=="B" ? a.itens.map(itemStr).join(" ").trim() : (a?itemStr(a.itens[0]).replace(/^[0-9]+/,""):"");
     const num = a && a.tipo==="B" ? (a.num||(a.itens[0].r==="-"?"-":"")) : "";
     L.push([q,tipo,paramDe(a)||"",'"'+itens+'"',num,Math.round(t),fmt(t),passes(q),
-            csvv(pags[q]||""),olhar[q]?1:"",'"'+gabStr(q)+'"'].join(","));
+            csvv(ef[q]?ef[q].v:""), (ef[q]&&ef[q].auto)?1:"", olhar[q]?1:"",'"'+gabStr(q)+'"'].join(","));
   }
   return L.join("\n");
 }
@@ -1156,6 +1192,7 @@ function buildJSONL(){
     regime:ficha.regime||null, tipo_sessao:ficha.tipo||null,
     itens_da_prova:ficha.itens?+ficha.itens:null, itens_julgaveis_no_set:itensDoSet(),
     olhar:olharList(), pags:Object.assign({},pags),
+    pags_efetivas:pagsEfetivas(),
     gabarito_visto_em:gabAberto, gabarito:Object.assign({},gab), conferencia:tally()};
   return [meta].concat(rows).map(o=>JSON.stringify(o)).join("\n");
 }

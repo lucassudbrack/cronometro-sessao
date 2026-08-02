@@ -59,9 +59,24 @@ EQ("T acumula com B", itemStr({ r: "A", c: "x", B: true, T: true }), "AxBT");
 ans[2] = blankAns("B"); ans[2].num = "042"; ans[2].itens[0].r = "042"; ans[2].itens[0].c = "?";
 
 /* ---- pag ---- */
+const efv = () => { const e = pagsEfetivas(); return [1, 2, 3, 4].map(q => e[q].v); };
+const efa = () => { const e = pagsEfetivas(); return [1, 2, 3, 4].map(q => e[q].auto); };
+EQ("sem nada digitado, a pagina espelha a ordem", efv(), ["1", "2", "3", "4"]);
+EQ("e tudo vem marcado como automatico", efa(), [true, true, true, true]);
+
 curQ = 3; setPag("7-8"); EQ("pag aceita intervalo", pags[3], "7-8");
-curQ = 4; $("pagSame").click(); EQ("pag repete a anterior preenchida", pags[4], "7-8");
+EQ("o default e cumulativo: depois de 7-8 vem a 9", efv(), ["1", "2", "7-8", "9"]);
+EQ("so a digitada deixa de ser automatica", efa(), [true, true, false, true]);
+curQ = 1; setPag("4");
+EQ("mexer na Q1 desloca todas as seguintes", efv(), ["4", "5", "7-8", "9"]);
+curQ = 1; setPag("");
+EQ("apagar volta ao default, sem materializar nada", efv(), ["1", "2", "7-8", "9"]);
+EQ("pags guarda so o que foi digitado", Object.keys(pags), ["3"]);
+
+curQ = 4; $("pagSame").click();
+EQ("pag repete a pagina efetiva da anterior", pags[4], "7-8");
 curQ = 3; setPag("");   EQ("pag vazia some do mapa", pags[3], undefined);
+EQ("com a Q3 no default e a Q4 digitada", efv(), ["1", "2", "3", "7-8"]);
 
 /* ---- ficha e olhar ---- */
 $("expBtn").click();
@@ -78,13 +93,13 @@ EQ("olhar registrado", olharList(), [1, 3]);
 /* ---- cenário 3: conferência ---- */
 const pend = pendencias();
 const txt = q => pend.filter(p => p.q === q).map(p => p.tipo + ":" + p.txt);
-EQ("Q1 completa (o item 4 esta em branco de proposito), so falta a pagina",
-   txt(1), ["aviso:sem página do caderno"]);
-EQ("Q3 nao tem tipo e nao tem pagina",
-   txt(3), ["falta:sem tipo escolhido", "aviso:sem página do caderno"]);
-EQ("Q4 so tem tempo e pagina", txt(4), ["falta:sem tipo escolhido"]);
-EQ("Q2 tipo B esta completa", txt(2), ["aviso:sem página do caderno"]);
+EQ("Q1 completa (o item 4 esta em branco de proposito)", txt(1), []);
+EQ("Q3 nao tem tipo", txt(3), ["falta:sem tipo escolhido"]);
+EQ("Q4 tambem nao", txt(4), ["falta:sem tipo escolhido"]);
+EQ("Q2 tipo B esta completa", txt(2), []);
 EQ("contagem de faltas", contaFaltas(), 2);
+EQ("paginas nao conferidas viram um aviso agrupado, nao um por questao",
+   pagsAuto(), [1, 2, 3]);
 
 // tipo B com número mas sem confiança é falta — o numpad deixa sair assim
 const cSave = ans[2].itens[0].c; ans[2].itens[0].c = null;
@@ -94,11 +109,11 @@ EQ("tipo B sem confianca vira falta",
 ans[2].itens[0].c = cSave;
 
 // tipo A com resposta e sem confiança
+// fica assim de proposito: a Q1 passa a ter pendencia e da para abri-la pela lista
 ans[1].itens[2] = { r: "V", c: null, B: false, T: false };
 EQ("tipo A sem confianca vira falta",
    pendencias().filter(p => p.q === 1 && p.tipo === "falta").map(p => p.txt),
    ["1 item sem confiança"]);
-ans[1].itens[2] = { r: "V", c: "c", B: false, T: false };
 
 /* ---- corrigir depois nao pode virar passada ---- */
 const passesAntes = passes(1), logAntes = log.length, tAntes = times[1], visitAntes = visit;
@@ -106,7 +121,9 @@ $("endRev").click();
 EQ("conferencia abriu", $("paneRev").classList.contains("on"), true);
 EQ("modo conferencia ligado", revisando, true);
 const rotulos = () => [...$("revList").children].map(r => r.querySelector(".qq").textContent);
-EQ("faltas primeiro, avisos depois", rotulos().slice(0, 2), ["Q3", "Q4"]);
+EQ("faltas primeiro, avisos depois", rotulos().slice(0, 3), ["Q1", "Q3", "Q4"]);
+EQ("o aviso agrupado de paginas vem por ultimo, sem questao",
+   /páginas vieram da ordem/.test([...$("revList").children].pop().textContent), true);
 EQ("faixas comprime corridas", faixas([3, 4, 5, 9, 11, 12]), "3–5, 9, 11, 12");
 // a Q1 tem só um aviso; abre por ela para conferir que corrigir nao cronometra
 const linhaQ1 = [...$("revList").children].find(r => r.querySelector(".qq").textContent === "Q1");
@@ -143,14 +160,14 @@ const cols = csv.find(l => l.startsWith("q,tipo"));
 const rows = csv.slice(csv.indexOf(cols) + 1);
 EQ("um unico cabecalho de colunas", csv.filter(l => l.startsWith("q,tipo")).length, 1);
 EQ("nenhuma linha antes do bloco de comentario", csv[0].startsWith("#"), true);
-EQ("colunas", cols, "q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito");
+EQ("colunas", cols, "q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,pag_auto,olhar,gabarito");
 EQ("rotulo com virgula fica citado",
    head.find(l => l.startsWith("# rotulo")), '# rotulo,"teste, com virgula"');
 EQ("materia no bloco", head.find(l => l.startsWith("# materia")), "# materia,Estatística");
-EQ("linha da Q1", rows[0], '1,A,5,"Vc F? Vc - FxB",,90,01:30,3,,1,""');
-EQ("linha da Q2 tipo B", rows[1], '2,B,3,"?",042,30,00:30,1,,,""');
-EQ("linha da Q3", rows[2], '3,,,"",,15,00:15,1,,1,""');
-EQ("linha da Q4 com pagina", rows[3], '4,,,"",,50,00:50,1,7-8,,""');
+EQ("linha da Q1", rows[0], '1,A,5,"Vc F? V - FxB",,90,01:30,3,1,1,1,""');
+EQ("linha da Q2 tipo B", rows[1], '2,B,3,"?",042,30,00:30,1,2,1,,""');
+EQ("linha da Q3", rows[2], '3,,,"",,15,00:15,1,3,1,1,""');
+EQ("linha da Q4 com pagina", rows[3], '4,,,"",,50,00:50,1,7-8,,,""');
 EQ("duracao total no bloco",
    head.find(l => l.startsWith("# duracao_total")), "# duracao_total,03:05");
 EQ("Q3 fechada quando o fechamento parou o cronometro", Math.round(times[3]), 15);
