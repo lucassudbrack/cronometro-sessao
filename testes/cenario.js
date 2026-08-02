@@ -268,7 +268,7 @@ EQ("sem seletor por questao quando o eixo e fixo", $("paramRow").style.display, 
 select(2); document.querySelector('#typeRow button[data-t="ME"]').click();
 EQ("ME herda as alternativas do setup", ans[2].alt, 4);
 EQ("e so gera A-D", botoes("#answerArea .opts button").map(b => b.textContent).join(" "),
-   "Ac A? Ax Bc B? Bx Cc C? Cx Dc D? Dx —");
+   "Ac A? Ax Bc B? Bx Cc C? Cx Dc D? Dx ×");
 select(3); document.querySelector('#typeRow button[data-t="B"]').click();
 EQ("conta herda os digitos do setup", ans[3].dig, 2);
 botoes("#answerArea .numpad button").find(b => b.textContent === "7").click();
@@ -1175,7 +1175,7 @@ EQ("N rende 0 e tira 0", pontosQ(1), 0 + 1 - 1);
 EQ("mas continua no que estava em jogo", pontosJogoQ(1), 4);
 
 // a borracha devolve o item a não preenchido
-op16(0, "—");
+op16(0, "×");
 EQ("a borracha limpa a marcacao", itemStr(ans[1].itens[0]), "");
 EQ("e o item vira nao preenchido", estadoDoItem(1, 0), "nao_preenchido");
 EQ("que a conferencia cobra",
@@ -1186,7 +1186,7 @@ op16(0, "Vc");
 EQ("remarcar tira a cobranca",
    pendencias().some(p => p.q === 1 && /não preenchid/.test(p.txt)), false);
 // a borracha apaga tambem as flags
-fl16(2, "B"); op16(2, "Vc"); fl16(2, "B"); op16(2, "—");
+fl16(2, "B"); op16(2, "Vc"); fl16(2, "B"); op16(2, "×");
 EQ("a borracha apaga resposta, confianca e flags",
    [ans[1].itens[2].r, ans[1].itens[2].c, ans[1].itens[2].B, ans[1].itens[2].T],
    [null, null, false, false]);

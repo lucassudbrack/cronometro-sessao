@@ -143,6 +143,10 @@
   .opts button{flex:1; padding:10px 2px; font-family:var(--mono); font-size:12px; text-transform:none; letter-spacing:0}
   .opts button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
   .opts .sep{flex:0 0 5px}
+  /* borracha: acao, nao opcao. Nunca fica selecionada e nao usa a cor de escolha. */
+  .opts button.limpa, .numpad button.limpa{color:var(--dim); border-style:dashed}
+  .opts button.limpa:not(:disabled):active, .numpad button.limpa:not(:disabled):active{
+    color:var(--alert); border-color:var(--alert)}
   .flags{display:flex; gap:3px; margin-left:6px}
   .flags button{flex:0 0 34px; padding:10px 0; font-family:var(--mono); font-size:11px; text-transform:none}
   .flags button.sel{background:var(--alert); border-color:var(--alert)}
@@ -895,7 +899,7 @@ function renderQ(){
       if(li<letters.length-1){ const s=document.createElement("div"); s.className="sep"; opts.appendChild(s); }
     });
     const bl=document.createElement("button");
-    bl.textContent="—"; bl.title="apaga a marcação deste item";
+    bl.textContent="×"; bl.className="limpa"; bl.title="apaga a marcação deste item";
     bl.disabled = bloqueia() || (it.r===null && !it.B && !it.T);
     bl.onclick=()=>{ it.r=null; it.c=null; it.B=false; it.T=false;
       ev({ev:"limpa",q:q,item:idx+1}); renderQ(); paint(); };
@@ -946,7 +950,7 @@ function renderB(area,a){
     a.num=a.num.slice(0,-1); it.r=a.num||null;
     ev({ev:"digit_del",q:q,num:a.num}); renderQ(); paint(); };
   pad.appendChild(del);
-  const bl=document.createElement("button"); bl.textContent="—";
+  const bl=document.createElement("button"); bl.textContent="×"; bl.className="limpa";
   bl.title="apaga a marcação desta questão";
   bl.disabled = bloqueia() || (!a.num && !it.B && !it.T);
   bl.onclick=()=>{ a.num=""; it.r=null; it.c=null; it.B=false; it.T=false;

@@ -162,7 +162,7 @@ flag nenhuma não é estado da prova — é lacuna de preenchimento, conta em
 `itens_nao_preenchidos`, e a conferência cobra: em sessão fechada tem que ser
 zero.
 
-O botão **—** não declara estado: é borracha. Limpa resposta, confiança e
+O botão **×** não declara estado: é borracha. Limpa resposta, confiança e
 flags, e devolve o item a não preenchido.
 
 **O app registra a declaração, não a causa.** Por que você ficou sem direção
