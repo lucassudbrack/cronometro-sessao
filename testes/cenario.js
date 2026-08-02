@@ -888,8 +888,10 @@ EQ("ignorando B, o palpite certo entra e o errado tambem",
    [X().pontos_ignorando_B, X().real_ignorando_B], [1, 0.1667]);
 
 EQ("acerto do enfrentado = (C_m+C_B) / opinou", X().acerto_do_enfrentado, 0.5);
-EQ("branco por tempo = T/I", X().branco_por_tempo, 0.1667);
-EQ("branco por conceito = S/I", X().branco_por_conceito, 0.1667);
+EQ("nao ha mais indice que nomeie a causa do branco",
+   [X().branco_por_tempo, X().branco_por_conceito], [undefined, undefined]);
+EQ("as contagens ficam, para quem quiser dividir sabendo o que divide",
+   [X().T, X().S, X().I], [1, 1, 6]);
 EQ("branco por disciplina = (C_B+E_B)/I", X().branco_por_disciplina, 0.3333);
 EQ("valor do branco = (E_B−C_B)/I", X().valor_do_branco, 0);
 EQ("acerto B-palpite = C_B/(C_B+E_B)", X().acerto_B_palpite, 0.5);
@@ -915,9 +917,11 @@ const v12 = k => (h12.find(l => l.startsWith("# " + k + ",")) || "").split(",")[
 EQ("as primitivas vao no bloco",
    ["C_m", "E_m", "C_B", "E_B", "S", "T", "I"].map(v12), ["1", "1", "1", "1", "1", "1", "6"]);
 EQ("e a identidade e declarada fechada", v12("identidade_fecha"), "1");
-EQ("os indices tambem",
-   [v12("real"), v12("acerto_do_enfrentado"), v12("branco_por_tempo")],
-   ["0.0833", "0.5", "0.1667"]);
+EQ("os indices tambem", [v12("real"), v12("acerto_do_enfrentado")], ["0.0833", "0.5"]);
+EQ("e o bloco declara que a causa do branco nao e do app",
+   /caderno/.test(h12.find(l => l.startsWith("# causa_do_branco")) || ""), true);
+EQ("os indices de causa sumiram do bloco",
+   h12.some(l => /^# branco_por_(tempo|conceito),/.test(l)), false);
 EQ("o estado entra no arquivo de estatisticas",
    buildEstat().split("\n").find(l => l.startsWith("tipo,")),
    "tipo,confianca,sem_tempo,deixaria_branco,resultado,estado,itens,pontos");
@@ -929,7 +933,7 @@ EQ("os indices saem no bloco do CSV principal", v12("I"), "6");
 
 /* ---- cenário 13: questão sem gabarito não pode sumir em silêncio ---- */
 // Reproduz o que aconteceu na sessão de 02/08: a Q4 ficou sem gabarito e levou
-// 4 dos 5 itens marcados com T embora, derrubando branco_por_tempo de 12% para 3%.
+// 4 dos 5 itens marcados com T embora, derrubando a primitiva T de 5 para 1.
 Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
 idx = []; sid = null;
 $("tpl").value = "bacen"; $("tpl").dispatchEvent(new Event("change"));
@@ -952,7 +956,7 @@ EQ("os quatro T foram marcados",
    [1, 2].reduce((s, q) => s + ans[q].itens.filter(i => i.T).length, 0), 4);
 EQ("mas so os da questao com gabarito viram a primitiva T", indices().T, 2);
 EQ("e os outros quatro contam como sem gabarito", indices().sem_gabarito, 2);
-EQ("branco_por_tempo enxerga so metade", indices().branco_por_tempo, 1);
+EQ("a primitiva T enxerga so metade", indices().T, 2);
 EQ("a conferencia agora cobra a questao sem gabarito",
    pendencias().filter(p => p.q === 2 && p.tipo === "falta").map(p => p.txt),
    ["sem gabarito — sai de todos os índices"]);
@@ -966,7 +970,7 @@ EQ("gabarito parcial tambem e cobrado, com a contagem",
 gab[2] = { itens: ["V", "V"], num: "" };
 EQ("completo, a cobranca some", pendencias().filter(p => /gabarito/.test(p.txt)).length, 0);
 EQ("e agora os quatro T aparecem", indices().T, 4);
-EQ("branco_por_tempo passa a dizer a verdade", indices().branco_por_tempo, 1);
+EQ("T passa a dizer a verdade", indices().T, 4);
 
 const h13 = buildCSV().split(String.fromCharCode(10)).filter(l => l.startsWith("#"));
 const v13 = k => (h13.find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];

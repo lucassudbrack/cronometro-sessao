@@ -1182,8 +1182,7 @@ function paintGab(){
     (c.sem ? "<span style='color:var(--alert)'>"+c.sem+" ainda sem gabarito — some de todos os índices</span>"
            : "tudo conferido")+"<br>"+
     "<b>"+X.pontos+"</b> de <b>"+X.pontos_em_jogo+"</b> pontos em jogo · real <b>"+pct(X.real)+"</b><br>"+
-    "enfrentado <b>"+pct(X.acerto_do_enfrentado)+"</b> · por tempo <b>"+pct(X.branco_por_tempo)+
-    "</b> · por conceito <b>"+pct(X.branco_por_conceito)+"</b><br>"+
+    "enfrentado <b>"+pct(X.acerto_do_enfrentado)+"</b><br>"+
     "C_m "+X.C_m+" · E_m "+X.E_m+" · C_B "+X.C_B+" · E_B "+X.E_B+" · S "+X.S+" · T "+X.T+
     " = <b>"+X.I+"</b>"+(X.identidade_fecha?"":" <span style='color:var(--alert)'>NÃO FECHA</span>")+"<br>"+
     "<span style='color:var(--dim)'>pelos pesos declarados no setup; item com B rende 0 e tira 0, mas continua no denominador</span>";
@@ -1566,8 +1565,12 @@ function indices(){
     real_ignorando_B: rr(ptsComB, pontosJogo),
     real: rr(ptsLiq, pontosJogo),
     acerto_do_enfrentado: r(n.C_m+n.C_B, opinou),
-    branco_por_tempo: r(n.T, I),
-    branco_por_conceito: r(n.S, I),
+    // branco_por_tempo e branco_por_conceito saíram. S é um resíduo — branco
+    // menos T — e batizá-lo de "por conceito" seria o app afirmar uma causa
+    // que ele não observa: pode ser desconhecimento, esquecimento de tocar T,
+    // ou pulo estratégico. A causa se lê no caderno, na página que pag aponta.
+    // T continua exportado como primitiva: é declaração sua, e T/I é uma
+    // divisão que quem analisa faz em um passo, sabendo o que está dividindo.
     branco_por_disciplina: r(n.C_B+n.E_B, I),
     valor_do_branco: rr(n.E_B-n.C_B, I),
     valor_do_branco_pontos: rr(evitado-abrido, pontosJogo),
@@ -1700,7 +1703,8 @@ function buildCSV(){
   // erros são sempre 0 e o total é sempre igual à primitiva T.
   L.push("# n_I,"+X.I);
   L.push("# n_opinou,"+X.opinou);
-  L.push("# glossario,"+csvv("toda taxa tem o seu n ao lado; 0 com n=1 não é 0 com n=50 · real = líquido normalizado contra a prova · item com B rende 0 e tira 0 mas fica no denominador · S = enfrentei sem palpite · T = não alcancei por tempo"));
+  L.push("# glossario,"+csvv("toda taxa tem o seu n ao lado; 0 com n=1 não é 0 com n=50 · real = líquido normalizado contra a prova · item com B rende 0 e tira 0 mas fica no denominador"));
+  L.push("# causa_do_branco,"+csvv("o app registra a declaração, não a causa. T = você tocou T, não alcancei. S = ficou em branco e você não declarou nada; pode ser desconhecimento, esquecimento de tocar T ou pulo estratégico. A causa se lê no caderno, na página da coluna pag"));
   L.push("# identidade,"+csvv("C_m+E_m+C_B+E_B+S+T = I"));
   ["C_m","E_m","C_B","E_B","S","T","I"].forEach(k=>L.push("# "+k+","+X[k]));
   L.push("# identidade_fecha,"+(X.identidade_fecha?1:0));
@@ -1711,8 +1715,6 @@ function buildCSV(){
   L.push("# pontos_ignorando_B,"+X.pontos_ignorando_B);
   [["real","projeção de nota, tendência"],
    ["acerto_do_enfrentado","onde meu modelo falha"],
-   ["branco_por_tempo","pacing"],
-   ["branco_por_conceito","cobertura"],
    ["branco_por_disciplina","política de branco"],
    ["valor_do_branco","a disciplina de branco me paga"],
    ["valor_do_branco_pontos","o mesmo, em pontos — com erro valendo 0 a versão em contagem engana"],

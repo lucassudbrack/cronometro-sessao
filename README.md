@@ -145,8 +145,6 @@ contra o que você resolveu enfrentar.
 |---|---|---|
 | projeção de nota, tendência | **real** (master) | pontos líquidos ÷ pontos em jogo |
 | onde meu modelo falha | acerto do enfrentado | (C_m+C_B) ÷ (C_m+E_m+C_B+E_B) |
-| pacing | branco por tempo | T ÷ I |
-| cobertura | branco por conceito | S ÷ I |
 | política de branco | branco por disciplina | (C_B+E_B) ÷ I |
 | a disciplina me paga? | valor do branco | (E_B−C_B) ÷ I |
 | política de chute | acerto por certeza / dúvida / chute / B-palpite | fórmula, não input |
@@ -157,6 +155,13 @@ no erro devolve exatamente essa fração, e com os pesos da ANPEC (conta vale +5
 e erra 0) continua dizendo a verdade, o que a fração crua não faria. Pelo mesmo
 motivo sai também `valor_do_branco_pontos`: quando o erro não pune, a versão em
 contagem diz que a disciplina é neutra, e ela custou o acerto que você abriu mão.
+
+**O app registra a declaração, não a causa.** `T` é você tendo tocado T.
+`S` é o resíduo: ficou em branco e você não declarou nada — pode ser
+desconhecimento, esquecimento de tocar T ou pulo estratégico. Por isso não há
+índice chamado "branco por conceito": batizar um resíduo de causa é o app
+afirmando o que não observa. As contagens `T`, `S` e `I` saem no bloco e a
+divisão é de quem analisa, com o caderno aberto na página da coluna `pag`.
 
 **T bloqueia a marcação** do item e o torna branco automaticamente. T não é um
 jeito de responder — é a declaração de que você não chegou lá. Sem esse
