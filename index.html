@@ -1718,7 +1718,6 @@ function buildCSV(){
   });
   // sem_tempo_* deixou de ser emitido: desde que T força branco, os acertos e
   // erros são sempre 0 e o total é sempre igual à primitiva T.
-  L.push("# n_I,"+X.I);
   L.push("# n_opinou,"+X.opinou);
   L.push("# glossario,"+csvv("toda taxa tem o seu n ao lado; 0 com n=1 não é 0 com n=50 · real = líquido normalizado contra a prova · item com B rende 0 e tira 0 mas fica no denominador"));
   L.push("# causa_do_branco,"+csvv("o app registra a declaração, não a causa. T = você tocou T, não alcancei. S = ficou em branco e você não declarou nada; pode ser desconhecimento, esquecimento de tocar T ou pulo estratégico. A causa se lê no caderno, na página da coluna pag"));
@@ -1908,7 +1907,11 @@ $("nextBtn").onclick=()=>{ if(curQ<N) irQ(curQ+1); };
 document.querySelectorAll("#typeRow button").forEach(b=>b.onclick=()=>{
   if(bloqueia()){ toast("tempo esgotado — a folha está travada"); return; }
   const t=b.dataset.t;
-  if(ans[curQ] && ans[curQ].tipo!==t && !confirm("Trocar o tipo apaga as marcações desta questão. Continuar?")) return;
+  // Tocar o tipo que já está selecionado não é trocar nada: antes caía direto no
+  // blankAns e apagava a questão inteira em silêncio, porque a confirmação só
+  // dispara quando o tipo difere. Custou uma resposta digitada duas vezes.
+  if(ans[curQ] && ans[curQ].tipo===t) return;
+  if(ans[curQ] && !confirm("Trocar o tipo apaga as marcações desta questão. Continuar?")) return;
   ans[curQ]=blankAns(t); ev({ev:"tipo",q:curQ,tipo:t}); renderQ(); paint(); save();
 });
 // Cada sessão tem chave própria, então começar outra não apaga esta — ela fica

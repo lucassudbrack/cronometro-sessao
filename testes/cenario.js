@@ -1083,6 +1083,51 @@ EQ("e nao trava nunca", travado, false);
 EQ("o rodape volta a mostrar o total", $("rotTotal").textContent, "Sessão");
 setRunning(false);
 
+/* ---- cenário 15: tocar o tipo já selecionado não pode apagar ---- */
+// Aconteceu na sessão de 02/08: a Q9 tinha 42 com confiança c, o botão "Conta"
+// foi tocado de novo e a resposta sumiu sem aviso.
+Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
+idx = []; sid = null;
+$("tpl").value = "livre"; $("tpl").dispatchEvent(new Event("change"));
+usa = { A: true, ME: true, B: true }; pintaUsa();
+cfgA = 3; cfgME = 4; cfgB = 2; pintaEixos();
+$("mConc").value = "T"; $("mConc").dispatchEvent(new Event("change"));
+$("mMat").value = "Retoque"; $("mMat").dispatchEvent(new Event("change"));
+$("mSub").value = ""; $("mSub").dispatchEvent(new Event("change"));
+$("mFonte").value = ""; $("mFonte").dispatchEvent(new Event("change"));
+$("nIn").value = "2"; apelidos = {}; paintApelidos();
+$("startBtn").click();
+const tp = v => document.querySelector('#typeRow button[data-t="' + v + '"]').click();
+
+select(1); tp("B");
+[...document.querySelectorAll("#answerArea .numpad button")].find(b => b.textContent === "4").click();
+[...document.querySelectorAll("#answerArea .numpad button")].find(b => b.textContent === "2").click();
+[...document.querySelectorAll("#answerArea .opts button")].find(b => /certeza/.test(b.textContent)).click();
+EQ("a conta esta preenchida", [ans[1].num, ans[1].itens[0].c], ["42", "c"]);
+const antes = events.length;
+window.__confirmYes = false;
+tp("B");
+EQ("tocar o tipo ja selecionado nao apaga", [ans[1].num, ans[1].itens[0].c], ["42", "c"]);
+EQ("e nem gera evento", events.length, antes);
+
+// trocar de verdade continua pedindo confirmacao, e recusar preserva
+tp("A");
+EQ("recusar a troca preserva a conta", [ans[1].tipo, ans[1].num], ["B", "42"]);
+window.__confirmYes = true;
+tp("A");
+EQ("aceitar troca de verdade", ans[1].tipo, "A");
+EQ("e ai sim a folha e nova", ans[1].itens.length, 3);
+
+select(2); tp("ME");
+[...document.querySelectorAll("#answerArea .opts button")].find(b => b.textContent === "Cc").click();
+const antes2 = events.length;
+tp("ME");
+EQ("vale para multipla tambem", itemStr(ans[2].itens[0]), "Cc");
+EQ("sem evento", events.length, antes2);
+setRunning(false);
+EQ("n_I saiu do bloco por ser o proprio I",
+   buildCSV().split(String.fromCharCode(10)).some(l => l.startsWith("# n_I,")), false);
+
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +
   [...new Set(events.map(e => e.ev))].join(" "));
