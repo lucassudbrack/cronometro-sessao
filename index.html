@@ -1667,6 +1667,7 @@ function buildCSV(){
   L.push("# tipos_na_prova,"+csvv(["A","ME","B"].filter(k=>usa[k]).join(" ")));
   L.push("# modelo,"+csvv(ficha.template||"livre"));
   L.push("# estatisticas_completas_em,"+csvv(nomeBase()+"_estatisticas.csv"));
+  L.push("# eventos_completos_em,"+csvv(nomeBase()+"_eventos.csv"));
   L.push("# col.pag_auto,"+csvv("1 = a pagina veio da ordem das questoes, nao foi conferida"));
   const ef=pagsEfetivas();
   L.push("# col.apelido,"+csvv("nome da questao; sem apelido, e a pagina a que ela se refere"));
@@ -1688,29 +1689,54 @@ function buildCSV(){
   }
   return L.join("\n");
 }
-function buildJSONL(){
-  invalidaPags(); commit(); if(running) segStart=now();   // a passada viva também entra fechada no arquivo
+/* ---------- log de eventos em CSV ----------
+   Mesmo conteúdo que o jsonl tinha, em tabela. O meta saiu porque cada uma das
+   suas 28 chaves já vive no bloco # do CSV principal ou no de estatísticas —
+   o único conteúdo insubstituível do jsonl era o fluxo de eventos, e é ele que
+   está aqui. Uma linha por evento, colunas fixas, e um "extra" que recolhe o
+   que não tiver coluna própria, para evento novo nunca sumir do arquivo.      */
+const EVCOLS=["n","t","hora","ms","ev","q","item","passada","seg","resp","conf",
+              "flag","on","tipo","campo","valor","rev","pos_gabarito","extra"];
+// para onde cada chave crua vai
+const EVMAP={ordem:"passada", d:"valor", num:"valor", pag:"valor", apelido:"valor",
+             eixo:"campo", sec:"seg"};
+function buildEventos(){
+  invalidaPags(); commit(); if(running) segStart=now();
   const all=log.concat(visit?[visit]:[]);
-  const rows=all.map((v,i)=>({t:iso(v.at),ev:"passada",ordem:i+1,q:v.q,seg:sec1(v.sec),
-                              truncada:v.trunc?true:undefined}))
-                .concat(events)
-                .sort((a,b)=> a.t<b.t?-1 : a.t>b.t?1 : 0);   // append-only de verdade: em ordem
-  const eixo = v => v===0 ? "na hora" : v;
-  const meta={t:iso(Date.now()),ev:"meta",sessao:nomeBase(),questoes:N,
-    ce_itens:eixo(cfgA), me_alternativas:eixo(cfgME), conta_digitos:eixo(cfgB),
-    data:ficha.data||null, concurso:ficha.concurso||null,
-    materia:ficha.mat||null, subtopico:ficha.sub||null, fonte:ficha.fonte||null,
-    tipo_sessao:ficha.tipo||null, cronometrada:cronometrar,
-    modelo:ficha.template||"livre", tipos_na_prova:["A","ME","B"].filter(k=>usa[k]),
-    pesos:JSON.parse(JSON.stringify(pesos)),
-    indices:indices(),
-    itens_da_prova:ficha.itens?+ficha.itens:null, itens_julgaveis_no_set:itensDoSet(),
-    olhar:olharList(), pags:Object.assign({},pags), apelidos:Object.assign({},apelidos),
-    pags_efetivas:pagsEfetivas(),
-    gabarito_visto_em:gabAberto, gabarito:Object.assign({},gab), conferencia:tally(),
-    estatisticas:estatTidy()};
-  return [meta].concat(rows).map(o=>JSON.stringify(o)).join("\n");
+  const linhas=all.map((v,i)=>({t:iso(v.at),ev:"passada",ordem:i+1,q:v.q,seg:sec1(v.sec),
+                                truncada:v.trunc?true:undefined}))
+                  .concat(events)
+                  .sort((a,b)=> a.t<b.t?-1 : a.t>b.t?1 : 0);
+  const t0 = linhas.length ? Date.parse(linhas[0].t) : 0;
+  const L=[];
+  L.push("# gerado_por,app sessao v1");
+  L.push("# sessao,"+csvv(nomeBase()));
+  L.push("# exportado_em,"+iso(Date.now()));
+  L.push("# grao,"+csvv("um evento por linha, em ordem cronológica"));
+  L.push("# t,"+csvv("relógio de parede em ISO 8601 UTC · hora é o mesmo em local · ms conta do primeiro evento"));
+  L.push("# ev,"+csvv("start passada enter leave pause resume tipo param mark conf flag digit digit_del pag apelido ficha olhar gab gabarito_aberto recover"));
+  L.push("# rev,"+csvv("1 = feito na conferência, depois do relógio"));
+  L.push("# extra,"+csvv("campos sem coluna própria, como chave=valor"));
+  L.push(EVCOLS.join(","));
+  linhas.forEach((o,i)=>{
+    const c={n:i+1, t:o.t, hora:hhmm(o.t), ms:Math.max(0,Date.parse(o.t)-t0)};
+    const sobra=[];
+    Object.keys(o).forEach(k=>{
+      if(k==="t") return;
+      const alvo = EVMAP[k] || k;
+      if(EVCOLS.indexOf(alvo)>=0 && c[alvo]===undefined){
+        c[alvo] = typeof o[k]==="boolean" ? (o[k]?1:0) : o[k];
+      } else if(o[k]!==undefined){
+        // objeto e array viram JSON, senao saem como [object Object]
+        sobra.push(k+"="+(o[k]!==null && typeof o[k]==="object" ? JSON.stringify(o[k]) : o[k]));
+      }
+    });
+    if(sobra.length) c.extra=sobra.join(" ");
+    L.push(EVCOLS.map(k=>c[k]===undefined||c[k]===null?"":csvv(String(c[k]))).join(","));
+  });
+  return L.join("\n");
 }
+
 function dl(name,txt,mime){
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([txt],{type:mime}));
@@ -1721,9 +1747,9 @@ function doExport(){
   const base=nomeBase();
   dl(base+".csv","\ufeff"+buildCSV(),"text/csv");
   setTimeout(()=>dl(base+"_estatisticas.csv","\ufeff"+buildEstat(),"text/csv"),350);
-  setTimeout(()=>dl(base+"_eventos.jsonl",buildJSONL(),"application/x-ndjson"),700);
+  setTimeout(()=>dl(base+"_eventos.csv","\ufeff"+buildEventos(),"text/csv"),700);
   exported=true;
-  toast("CSV + estatísticas + trilha exportados");
+  toast("3 CSV: sessão + estatísticas + eventos");
 }
 $("expBtn").onclick=openEnd;
 $("endExp").onclick=()=>{

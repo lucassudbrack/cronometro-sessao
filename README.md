@@ -146,7 +146,7 @@ mutuamente exclusivos.
 
 ## Saída
 
-Três arquivos. O primário é o último.
+Três arquivos, todos CSV.
 
 `<nome>.csv` — uma linha por questão:
 
@@ -178,11 +178,17 @@ itens em A, de alternativas em ME, de dígitos em B. `gabarito` usa o mesmo
 alfabeto de `itens`, com `X` para anulada e vazio para sem gabarito. `pontos` é
 a soma dos pesos dos itens daquela questão.
 
-`<nome>_eventos.jsonl` — log append-only, cronológico, uma linha por evento
-(`meta`, `passada`, `enter`, `leave`, `mark`, `flag`, `pag`, `ficha`, `olhar`,
-`pause`, `resume`, `recover`). É o lastro: o CSV é derivado dele. Todo evento
-discreto é gravado em disco no toque, mais um heartbeat de 5 s enquanto o
-cronômetro corre.
+`<nome>_eventos.csv` — o log, uma linha por evento, em ordem cronológica.
+Colunas fixas: `n, t, hora, ms, ev, q, item, passada, seg, resp, conf, flag, on,
+tipo, campo, valor, rev, pos_gabarito, extra`. `t` é relógio de parede em ISO,
+`ms` conta do primeiro evento, e `extra` recolhe o que não tem coluna própria
+como `chave=valor`, para evento novo nunca sumir do arquivo.
+
+Eventos: `start`, `passada`, `enter`, `leave`, `pause`, `resume`, `tipo`, `param`,
+`mark`, `conf`, `flag`, `digit`, `digit_del`, `pag`, `apelido`, `ficha`, `olhar`,
+`gab`, `gabarito_aberto`, `recover`. Todo evento discreto vai a disco no toque,
+mais um heartbeat de 5 s enquanto o cronômetro corre — é isso que faz o log ser
+o lastro, não o formato do arquivo.
 
 ## Testes
 

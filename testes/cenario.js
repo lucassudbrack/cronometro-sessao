@@ -181,19 +181,39 @@ EQ("duracao total no bloco",
    head.find(l => l.startsWith("# duracao_total")), "# duracao_total,03:05");
 EQ("Q3 fechada quando o fechamento parou o cronometro", Math.round(times[3]), 15);
 
-/* ---- JSONL ---- */
-const jl = buildJSONL().split("\n").map(JSON.parse);
-EQ("primeira linha e meta", jl[0].ev, "meta");
-EQ("meta leva materia", jl[0].materia, "Estatística");
-EQ("meta leva olhar", jl[0].olhar, [1, 3]);
-EQ("meta leva pags", jl[0].pags, { 4: "7-8" });
-const ts = jl.slice(1).map(r => r.t);
-EQ("resto do arquivo em ordem cronologica",
+/* ---- CSV de eventos ---- */
+const evCsv = () => {
+  const L = buildEventos().split(String.fromCharCode(10));
+  const cab = L.find(l => l.startsWith("n,t,"));
+  const cols = cab.split(",");
+  return L.slice(L.indexOf(cab) + 1).map(l => {
+    // RFC 4180: "" dentro de campo citado e uma aspa literal
+    const v = []; let cur = "", asp = false;
+    for (let i = 0; i < l.length; i++) {
+      const ch = l[i];
+      if (ch === String.fromCharCode(34)) {
+        if (asp && l[i + 1] === String.fromCharCode(34)) { cur += String.fromCharCode(34); i++; }
+        else asp = !asp;
+        continue;
+      }
+      if (ch === "," && !asp) { v.push(cur); cur = ""; continue; }
+      cur += ch;
+    }
+    v.push(cur);
+    const o = {}; cols.forEach((k, i) => o[k] = v[i]); return o; });
+};
+const evs = evCsv();
+EQ("so comentario antes do cabecalho",
+   buildEventos().split(String.fromCharCode(10)).slice(0, 8).every(l => l.startsWith("#")), true);
+EQ("numeracao sequencial", evs.map(r => +r.n), evs.map((_, i) => i + 1));
+EQ("a coluna ms nao anda para tras",
+   evs.every((r, i) => i === 0 ? r.ms === "0" : +r.ms >= +evs[i - 1].ms), true);
+const ts = evs.map(r => r.t);
+EQ("eventos em ordem cronologica",
    ts.slice().sort().join("|") === ts.join("|"), true);
-EQ("passadas fechadas no arquivo", jl.filter(r => r.ev === "passada").length, 6);
+EQ("passadas fechadas no arquivo", evs.filter(r => r.ev === "passada").length, 6);
 EQ("o log distingue correcao de marcacao sob relogio",
-   jl.filter(r => r.ev === "mark" && r.rev).length, 1);
-/* ---- cenário 4: crash e retomada de ponta a ponta ---- */
+   evs.filter(r => r.ev === "mark" && r.rev === "1").length, 1);
 // O aparelho morre com a Q2 aberta. O que estiver no disco é tudo que sobra.
 $("nIn").value = "3"; $("startBtn").click();
 select(1); adv(40000);
@@ -221,9 +241,8 @@ EQ("o log registra a recuperacao", rec.length, 1);
 EQ("recover aponta a questao certa", rec[0].q, 2);
 NEAR("recover carrega o piso medido", rec[0].sec, 300, 0.05);
 EQ("recover diz que e truncado", rec[0].truncada, true);
-const jl2 = buildJSONL().split("\n").map(JSON.parse);
-EQ("a passada truncada sai marcada no jsonl",
-   jl2.filter(r => r.ev === "passada" && r.truncada).length, 1);
+EQ("a passada truncada sai marcada no arquivo de eventos",
+   evCsv().filter(r => r.ev === "passada" && /truncada=true/.test(r.extra)).length, 1);
 EQ("a conferencia avisa que o tempo e piso",
    pendencias().some(p => p.q === 2 && /truncado/.test(p.txt)), true);
 
@@ -433,9 +452,9 @@ EQ("bloco traz a contagem",
    ["# itens_conferem,2", "# itens_divergem,1", "# itens_anulados,1"]);
 EQ("bloco registra quando o gabarito foi visto",
    /^# gabarito_visto_em,20/.test(csv6.find(l => l.startsWith("# gabarito_visto_em"))), true);
-const jl6 = buildJSONL().split("\n").map(JSON.parse);
-EQ("meta leva o gabarito inteiro", jl6[0].gabarito[1].itens, ["V", "X", "F"]);
-EQ("meta leva a contagem", jl6[0].conferencia.ok, 2);
+EQ("a contagem do gabarito esta no bloco",
+   csv6.find(l => l.startsWith("# itens_conferem,")), "# itens_conferem,2");
+EQ("cada toque no gabarito virou evento", evCsv().filter(r => r.ev === "gab").length > 0, true);
 
 /* ---- cenário 7: sessão de aprendizado não corre no relógio ---- */
 const clicaTipo = v => document.querySelector('#segTipo button[data-v="' + v + '"]').click();
@@ -477,8 +496,10 @@ EQ("segundos e mmss saem vazios, nao zero",
    r7.map(l => { const p = l.split(","); return p[6] + "|" + p[7]; }), ["|", "|"]);
 EQ("mas as passadas continuam saindo",
    r7.map(l => l.split(",")[8]), ["1", "1"]);
-EQ("o jsonl marca a sessao como nao cronometrada",
-   JSON.parse(buildJSONL().split("\n")[0]).cronometrada, false);
+EQ("o evento start marca a sessao como nao cronometrada",
+   evCsv().find(r => r.ev === "start").extra.includes("cronometrada=false"), true);
+EQ("e os pesos saem legiveis no extra, nao como [object Object]",
+   /pesos={"A":/.test(evCsv().find(r => r.ev === "start").extra), true);
 
 /* ---- cenário 8: apelidos ---- */
 clicaTipo("prova");
@@ -533,8 +554,8 @@ const c8 = csv8.find(l => l.startsWith("q,apelido"));
 const r8 = csv8.slice(csv8.indexOf(c8) + 1);
 EQ("apelido sai como segunda coluna",
    r8.map(l => l.split(",").slice(0, 2).join("|")), ["1|ANPEC14 Q5", "2|9"]);
-EQ("o jsonl leva os apelidos digitados",
-   JSON.parse(buildJSONL().split("\n")[0]).apelidos, { 1: "ANPEC14 Q5", 3: "BACEN22 Q10" });
+EQ("renomear a questao virou evento",
+   evCsv().filter(r => r.ev === "apelido").length > 0, true);
 
 /* ---- cenário 9: várias sessões guardadas ---- */
 // Este cenário mexe em disco de verdade: limpa e trabalha do zero.
@@ -698,8 +719,9 @@ EQ("e o unico branco de verdade vira S, nao T", [indices().S, indices().T], [1, 
 EQ("mas a flag continua na coluna sem_tempo do arquivo de estatisticas",
    buildEstat().split(String.fromCharCode(10)).filter(l => /^[AB]?ME?,/.test(l))
      .filter(l => l.split(",")[2] === "1").length > 0, true);
-EQ("o jsonl tambem leva as estatisticas",
-   JSON.parse(buildJSONL().split("\n")[0]).estatisticas.length, estatTidy().length);
+EQ("o arquivo de estatisticas tem uma linha por combinacao",
+   buildEstat().split(String.fromCharCode(10)).filter(l => /^(A|ME|B),/.test(l)).length,
+   estatTidy().length);
 
 doExport();
 EQ("o export sai com tres arquivos", window.__files.map(f => f.name.replace(/^[^_]*_/, "")),
@@ -904,8 +926,7 @@ EQ("e cada linha carrega um dos seis",
    buildEstat().split("\n").filter(l => /^A,/.test(l))
      .map(l => l.split(",")[5]).sort().join(" "),
    "C_B C_m E_B E_m S T anulado sem_gabarito");
-EQ("o jsonl leva os indices inteiros",
-   JSON.parse(buildJSONL().split("\n")[0]).indices.I, 6);
+EQ("os indices saem no bloco do CSV principal", v12("I"), "6");
 
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +
