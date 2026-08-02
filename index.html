@@ -164,6 +164,14 @@
   .field{display:flex; flex-direction:column; gap:5px}
   .seg{display:grid; grid-template-columns:repeat(2,1fr); gap:6px}
   .seg button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
+  .numseg{display:grid; grid-template-columns:repeat(6,1fr); gap:4px}
+  .numseg button{padding:9px 0; font-family:var(--mono); font-size:12px;
+    text-transform:none; letter-spacing:0}
+  .numseg button.wide{grid-column:span 2; font-family:var(--ui); font-size:9px;
+    text-transform:uppercase; letter-spacing:.08em}
+  .numseg button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
+  .paramrow{display:none; margin-bottom:12px}
+  .paramrow .eyebrow{display:block; margin-bottom:5px}
   .setup.hide{display:none}
   /* folha de fechamento: mesma caixa do setup, mas com conteúdo alto o bastante para rolar */
   .setup.sheet{justify-content:flex-start; gap:10px; padding:14px 14px 20px}
@@ -208,6 +216,7 @@
     <button data-t="ME">Múltipla</button>
     <button data-t="B">Conta</button>
   </div>
+  <div class="paramrow" id="paramRow"></div>
   <div class="pagrow">
     <span class="eyebrow">Pág. do caderno</span>
     <input id="pagIn" placeholder="7 ou 7-8" autocomplete="off" spellcheck="false" enterkeyhint="done">
@@ -244,19 +253,20 @@
   </div>
   <div class="field"><span class="eyebrow">Quantas questões</span><input id="nIn" value="15" inputmode="numeric"></div>
   <div class="field">
-    <span class="eyebrow">Questões C/E têm quantos itens</span>
-    <div class="seg" id="segItens">
-      <button data-v="5">5 itens (ANPEC)</button>
-      <button data-v="1">1 item (Cebraspe)</button>
-    </div>
+    <span class="eyebrow">C / E — itens por questão</span>
+    <div class="numseg" id="segA"></div>
   </div>
   <div class="field">
-    <span class="eyebrow">Múltipla escolha — alternativas</span>
-    <div class="seg" id="segAlt">
-      <button data-v="5">5 (A–E)</button>
-      <button data-v="4">4 (A–D)</button>
-    </div>
+    <span class="eyebrow">Múltipla — alternativas</span>
+    <div class="numseg" id="segME"></div>
   </div>
+  <div class="field">
+    <span class="eyebrow">Conta — dígitos</span>
+    <div class="numseg" id="segB"></div>
+  </div>
+  <p style="margin:-4px 0 0;font-size:10px;line-height:1.45;color:var(--dim)">
+    <b style="color:var(--mute)">na hora</b> deixa o eixo em aberto: você escolhe questão a questão,
+    ao abrir cada uma. O tipo da questão é sempre escolhido na hora.</p>
   <div class="field"><span class="eyebrow">Meta por questão (min) — opcional</span><input id="goalIn" placeholder="4" inputmode="decimal"></div>
   <div class="field"><span class="eyebrow">Rótulo da sessão — opcional</span><input id="tagIn" placeholder="Estatistica · Series · ANPEC 2014"></div>
   <button class="primary" id="startBtn" style="padding:13px">Começar</button>
@@ -310,7 +320,12 @@ const store = (typeof window!=="undefined" && window.storage) ? window.storage :
   }catch(e){ return null; }
 })();
 
-let N=15, goal=0, nItens=5, nAlt=5, tag="";
+let N=15, goal=0, tag="";
+// Três eixos de formato. Cada um vale para a sessão inteira OU fica em aberto
+// (valor 0 = "na hora"), e aí cada questão declara o seu ao ser aberta.
+// O tipo da questão nunca é decidido no setup — só se descobre lendo.
+let cfgA=5, cfgME=5, cfgB=3;
+const LETRAS="ABCDEFGHIJ";
 let times={}, log=[], visit=null, ans={}, events=[];
 // pags vive fora de ans de propósito: a página do caderno é fato físico da sessão,
 // não parte da resposta. Trocar o tipo da questão zera ans[q] e não pode levar a página junto.
@@ -345,11 +360,21 @@ function ev(o){
   exported=false; saveNow();
 }
 
+const novoItem = () => ({r:null,c:null,B:false,T:false});
+// Com o eixo em aberto a questão nasce sem parâmetro: tipo A sem itens, ME sem
+// alt, B sem dig. paramDe devolve null nesse estado, e a folha só aparece
+// depois da escolha — o app não vai supor cinco itens porque cinco é comum.
 function blankAns(tipo){
-  if(tipo==="A")  return {tipo:"A",  itens:Array.from({length:nItens},()=>({r:null,c:null,B:false,T:false}))};
-  if(tipo==="ME") return {tipo:"ME", itens:[{r:null,c:null,B:false,T:false}]};
-  return              {tipo:"B",  itens:[{r:null,c:null,B:false,T:false}], num:""};
+  if(tipo==="A")  return {tipo:"A",  itens:Array.from({length:cfgA},novoItem)};
+  if(tipo==="ME") return {tipo:"ME", itens:[novoItem()], alt:cfgME||null};
+  return              {tipo:"B",  itens:[novoItem()], dig:cfgB||null, num:""};
 }
+const paramDe = a => !a ? null
+  : a.tipo==="A"  ? (a.itens.length||null)
+  : a.tipo==="ME" ? (a.alt||null)
+  :                 (a.dig||null);
+const eixoDe = t => t==="A" ? cfgA : t==="ME" ? cfgME : cfgB;
+const NOME_EIXO = {A:"itens", ME:"alternativas", B:"dígitos"};
 
 /* ---------- cronometro ---------- */
 function commit(){ if(segStart===null) return;
@@ -411,7 +436,7 @@ function answeredCount(q){
   return a.itens.filter(it=>it.r!==null).length;
 }
 function isComplete(q){
-  const a=ans[q]; if(!a) return false;
+  const a=ans[q]; if(!a || paramDe(a)==null) return false;   // [].every() é true — guarda necessária
   if(a.tipo==="A")  return a.itens.every(it=>it.r!==null);
   if(a.tipo==="ME") return a.itens[0].r!==null;
   return (a.num&&a.num.length>0) || a.itens[0].r==="-";
@@ -427,8 +452,9 @@ function paint(){
     el.querySelector('[data-t="'+i+'"]').textContent = has? fmt(t) : "–";
     const p=passes(i);
     el.querySelector('[data-p="'+i+'"]').textContent = p>1 ? "×"+p : "";
-    const a=ans[i];
-    el.querySelector('[data-d="'+i+'"]').textContent = a ? (a.tipo==="A" ? answeredCount(i)+"/"+nItens : a.tipo) : "";
+    const a=ans[i], np=paramDe(a);
+    el.querySelector('[data-d="'+i+'"]').textContent =
+      !a ? "" : np==null ? a.tipo+"?" : a.tipo==="A" ? answeredCount(i)+"/"+np : a.tipo;
   }
   $("badge").textContent = visit ? visit.q : "—";
   $("badge").classList.toggle("idle", !visit);
@@ -467,18 +493,69 @@ $("pagSame").onclick=()=>{
 };
 
 /* ---------- painel de resposta ---------- */
+const VALS={A:[1,2,3,4,5,6,7,8,9,10], ME:[2,3,4,5,6,7,8,9,10], B:[2,3]};
+// Só aparece quando o eixo daquele tipo ficou "na hora" no setup. Se o setup
+// fixou um número, ele vale para todas e não há o que escolher aqui.
+function paintParam(){
+  const box=$("paramRow"), a=ans[curQ];
+  box.innerHTML=""; box.style.display="none";
+  if(!a || eixoDe(a.tipo)!==0) return;
+  box.style.display="block";
+  const lab=document.createElement("span");
+  lab.className="eyebrow"; lab.textContent=NOME_EIXO[a.tipo]+" desta questão";
+  box.appendChild(lab);
+  const g=document.createElement("div"); g.className="numseg";
+  VALS[a.tipo].forEach(v=>{
+    const b=document.createElement("button");
+    b.textContent=v; b.className = paramDe(a)===v ? "sel" : "";
+    b.onclick=()=>trocaParam(v);
+    g.appendChild(b);
+  });
+  box.appendChild(g);
+}
+function trocaParam(v){
+  const a=ans[curQ]; if(!a || paramDe(a)===v) return;
+  if(a.tipo==="A"){
+    const perde=a.itens.slice(v).filter(it=>it.r!==null).length;
+    if(perde && !confirm("Passar para "+v+" itens apaga "+perde+
+      (perde>1?" marcações":" marcação")+". Continuar?")) return;
+    while(a.itens.length>v) a.itens.pop();
+    while(a.itens.length<v) a.itens.push(novoItem());
+  } else if(a.tipo==="ME"){
+    const it=a.itens[0];
+    if(it.r && it.r!=="-" && LETRAS.slice(0,v).indexOf(it.r)<0){
+      if(!confirm("Com "+v+" alternativas a resposta "+it.r+" deixa de existir. Apagar?")) return;
+      it.r=null; it.c=null;
+    }
+    a.alt=v;
+  } else {
+    if(a.num && a.num.length>v){
+      if(!confirm("O número "+a.num+" não cabe em "+v+" dígitos. Cortar?")) return;
+      a.num=a.num.slice(0,v); a.itens[0].r=a.num||null;
+    }
+    a.dig=v;
+  }
+  ev({ev:"param",q:curQ,tipo:a.tipo,eixo:NOME_EIXO[a.tipo],valor:v});
+  renderQ(); paint();
+}
+
 function renderQ(){
   const q=curQ;
   $("badge").textContent=q;
   $("backBtn").textContent = revisando ? "Conferência" : "Grade";
-  paintPag();
+  paintPag(); paintParam();
   document.querySelectorAll("#typeRow button").forEach(b=>
     b.classList.toggle("sel", ans[q] && ans[q].tipo===b.dataset.t));
   const area=$("answerArea");
-  if(!ans[q]){ area.innerHTML='<p style="color:var(--dim);font-size:12px;margin:14px 2px">Escolha o tipo para abrir a folha.</p>'; return; }
+  const vazio=t=>'<p style="color:var(--dim);font-size:12px;margin:14px 2px">'+t+'</p>';
+  if(!ans[q]){ area.innerHTML=vazio("Escolha o tipo para abrir a folha."); return; }
   const a=ans[q];
+  if(paramDe(a)==null){
+    area.innerHTML=vazio("Escolha acima quantos "+NOME_EIXO[a.tipo]+" esta questão tem.");
+    return;
+  }
   if(a.tipo==="B"){ renderB(area,a); return; }
-  const letters = a.tipo==="ME" ? ["A","B","C","D","E"].slice(0,nAlt) : ["V","F"];
+  const letters = a.tipo==="ME" ? LETRAS.slice(0,a.alt).split("") : ["V","F"];
   area.innerHTML="";
   a.itens.forEach((it,idx)=>{
     const box=document.createElement("div"); box.className="item";
@@ -518,12 +595,12 @@ function renderB(area,a){
   const q=curQ, it=a.itens[0];
   area.innerHTML="";
   const disp=document.createElement("div"); disp.className="numdisp";
-  disp.textContent = it.r==="-" ? "—" : (a.num||"___").padStart(3,"_");
+  disp.textContent = it.r==="-" ? "—" : (a.num||"").padStart(a.dig,"_");
   area.appendChild(disp);
   const pad=document.createElement("div"); pad.className="numpad";
   for(let d=0;d<=9;d++){
     const b=document.createElement("button"); b.textContent=d;
-    b.onclick=()=>{ if(a.num.length<3){ a.num+=d; it.r=a.num; ev({ev:"digit",q:q,d:d});
+    b.onclick=()=>{ if(a.num.length<a.dig){ a.num+=d; it.r=a.num; ev({ev:"digit",q:q,d:d});
       renderQ(); paint(); save(); } };
     pad.appendChild(b);
   }
@@ -608,7 +685,7 @@ function snapshot(){
       vis.sec+=d; t[visit.q]=(t[visit.q]||0)+d;
     }
   }
-  return {fmt:1,N,goal,nItens,nAlt,tag,times:t,log,visit:vis,ans,pags,ficha,olhar,events,
+  return {fmt:2,N,goal,cfgA,cfgME,cfgB,tag,times:t,log,visit:vis,ans,pags,ficha,olhar,events,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -634,8 +711,17 @@ async function restore(){ if(!store) return null;
 // errado, o prejuízo é uma sessão de estudo, e só se descobre já perdida.
 function retomar(prev){
   pending=null;
-  N=prev.N; goal=prev.goal||0; nItens=prev.nItens||5; nAlt=prev.nAlt||5; tag=prev.tag||"";
+  N=prev.N; goal=prev.goal||0; tag=prev.tag||"";
+  // fmt 1 guardava nItens/nAlt globais e questões sem alt/dig próprios.
+  cfgA  = prev.cfgA  !== undefined ? prev.cfgA  : (prev.nItens || 5);
+  cfgME = prev.cfgME !== undefined ? prev.cfgME : (prev.nAlt   || 5);
+  cfgB  = prev.cfgB  !== undefined ? prev.cfgB  : 3;
   times=prev.times||{}; log=prev.log||[]; ans=prev.ans||{}; events=prev.events||[];
+  Object.keys(ans).forEach(q=>{
+    const a=ans[q];
+    if(a.tipo==="ME" && a.alt===undefined) a.alt=prev.nAlt||5;
+    if(a.tipo==="B"  && a.dig===undefined) a.dig=3;
+  });
   pags=prev.pags||{}; ficha=Object.assign(fichaVazia(),prev.ficha||{}); olhar=prev.olhar||{};
   if(prev.visit){
     // A passada que estava aberta vira passada fechada, valendo o que foi medido
@@ -669,6 +755,7 @@ function pendencias(){
     const a=ans[q], t=times[q]||0;
     if(!a && !t && !pags[q] && !olhar[q]){ add(q,"aviso","não visitada"); continue; }
     if(!a){ add(q,"falta","sem tipo escolhido"); }
+    else if(paramDe(a)==null){ add(q,"falta","sem "+NOME_EIXO[a.tipo]+" escolhidos"); }
     else if(a.tipo==="A"){
       const sem=a.itens.filter(it=>it.r===null).length;
       if(sem) add(q,"falta",sem+" de "+a.itens.length+" itens sem resposta");
@@ -766,7 +853,10 @@ function paintVocab(){
 // o app não sabe quantos itens ela tem e não vai supor.
 function itensDoSet(){
   let n=0;
-  for(let q=1;q<=N;q++){ const a=ans[q]; if(!a) continue; n += a.tipo==="A" ? a.itens.length : 1; }
+  for(let q=1;q<=N;q++){
+    const a=ans[q]; if(!a || paramDe(a)==null) continue;
+    n += a.tipo==="A" ? a.itens.length : 1;
+  }
   return n;
 }
 function paintOlhar(){
@@ -830,18 +920,21 @@ function buildCSV(){
   L.push("# itens_da_prova,"+csvv(ficha.itens));
   L.push("# questoes_no_set,"+N);
   L.push("# itens_julgaveis_no_set,"+itensDoSet());
-  L.push("# itens_ce_por_questao,"+nItens);
-  L.push("# alternativas_me,"+nAlt);
+  const eixo = v => v===0 ? "na hora" : v;
+  L.push("# ce_itens,"+eixo(cfgA));
+  L.push("# me_alternativas,"+eixo(cfgME));
+  L.push("# conta_digitos,"+eixo(cfgB));
   L.push("# duracao_total,"+fmt(sessionLive()));
   L.push("# olhar,"+csvv(olharList().join(" ")));
-  L.push("q,tipo,itens,numerica,segundos,mmss,passadas,pag,olhar");
+  L.push("# param,"+csvv("tipo A: nº de itens · ME: nº de alternativas · B: nº de dígitos"));
+  L.push("q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar");
   for(let q=1;q<=N;q++){
     const a=ans[q]; const t=times[q]||0;
     if(!a && !t && !pags[q] && !olhar[q]) continue;
     const tipo=a?a.tipo:"";
     const itens = a && a.tipo!=="B" ? a.itens.map(itemStr).join(" ").trim() : (a?itemStr(a.itens[0]).replace(/^[0-9]+/,""):"");
     const num = a && a.tipo==="B" ? (a.num||(a.itens[0].r==="-"?"-":"")) : "";
-    L.push([q,tipo,'"'+itens+'"',num,Math.round(t),fmt(t),passes(q),
+    L.push([q,tipo,paramDe(a)||"",'"'+itens+'"',num,Math.round(t),fmt(t),passes(q),
             csvv(pags[q]||""),olhar[q]?1:""].join(","));
   }
   return L.join("\n");
@@ -853,7 +946,9 @@ function buildJSONL(){
                               truncada:v.trunc?true:undefined}))
                 .concat(events)
                 .sort((a,b)=> a.t<b.t?-1 : a.t>b.t?1 : 0);   // append-only de verdade: em ordem
-  const meta={t:iso(Date.now()),ev:"meta",rotulo:tag,questoes:N,itens_ce:nItens,alternativas_me:nAlt,
+  const eixo = v => v===0 ? "na hora" : v;
+  const meta={t:iso(Date.now()),ev:"meta",rotulo:tag,questoes:N,
+    ce_itens:eixo(cfgA), me_alternativas:eixo(cfgME), conta_digitos:eixo(cfgB),
     materia:ficha.mat||null, subtopico:ficha.sub||null, fonte:ficha.fonte||null,
     regime:ficha.regime||null, tipo_sessao:ficha.tipo||null,
     itens_da_prova:ficha.itens?+ficha.itens:null, itens_julgaveis_no_set:itensDoSet(),
@@ -911,14 +1006,24 @@ function podeDescartar(){
 $("newBtn").onclick=()=>{ if(!podeDescartar()) return;
   setRunning(false); sairRev(); closeEnd(); $("setup").classList.remove("hide"); started=false; };
 
-function seg(id,cur,cb){
-  document.querySelectorAll("#"+id+" button").forEach(b=>{
-    b.classList.toggle("sel", +b.dataset.v===cur);
-    b.onclick=()=>{ cb(+b.dataset.v); seg(id,+b.dataset.v,cb); };
+const EIXOS=[["A","segA",v=>cfgA=v,()=>cfgA],["ME","segME",v=>cfgME=v,()=>cfgME],
+             ["B","segB",v=>cfgB=v,()=>cfgB]];
+function pintaEixos(){
+  EIXOS.forEach(([t,el,set,get])=>{
+    const box=$(el); box.innerHTML="";
+    VALS[t].forEach(v=>{
+      const b=document.createElement("button");
+      b.textContent=v; b.className = get()===v ? "sel" : "";
+      b.onclick=()=>{ set(v); pintaEixos(); };
+      box.appendChild(b);
+    });
+    const b=document.createElement("button");
+    b.textContent="na hora"; b.className="wide"+(get()===0?" sel":"");
+    b.onclick=()=>{ set(0); pintaEixos(); };
+    box.appendChild(b);
   });
 }
-seg("segItens",5,v=>nItens=v);
-seg("segAlt",5,v=>nAlt=v);
+pintaEixos();
 
 $("startBtn").onclick=()=>{
   const n=parseInt($("nIn").value,10);
@@ -930,7 +1035,9 @@ $("startBtn").onclick=()=>{
   times={}; log=[]; visit=null; ans={}; pags={}; events=[]; sessionAccum=0; sessionStart=null; running=false;
   ficha=fichaVazia(); olhar={}; curQ=null;
   document.body.classList.remove("running","paused"); $("toggle").textContent="Pausar";
-  started=true; ev({ev:"start",questoes:N,itens_ce:nItens,alternativas_me:nAlt,rotulo:tag});
+  const eixo = v => v===0 ? "na hora" : v;
+  started=true; ev({ev:"start",questoes:N,rotulo:tag,
+    ce_itens:eixo(cfgA), me_alternativas:eixo(cfgME), conta_digitos:eixo(cfgB)});
   buildGrid(); paint(); save(); showPane("paneGrid");
   closeEnd(); $("setup").classList.add("hide");
 };

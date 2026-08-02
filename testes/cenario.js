@@ -143,14 +143,14 @@ const cols = csv.find(l => l.startsWith("q,tipo"));
 const rows = csv.slice(csv.indexOf(cols) + 1);
 EQ("um unico cabecalho de colunas", csv.filter(l => l.startsWith("q,tipo")).length, 1);
 EQ("nenhuma linha antes do bloco de comentario", csv[0].startsWith("#"), true);
-EQ("colunas", cols, "q,tipo,itens,numerica,segundos,mmss,passadas,pag,olhar");
+EQ("colunas", cols, "q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar");
 EQ("rotulo com virgula fica citado",
    head.find(l => l.startsWith("# rotulo")), '# rotulo,"teste, com virgula"');
 EQ("materia no bloco", head.find(l => l.startsWith("# materia")), "# materia,Estatística");
-EQ("linha da Q1", rows[0], '1,A,"Vc F? Vc - FxB",,90,01:30,3,,1');
-EQ("linha da Q2 tipo B", rows[1], '2,B,"?",042,30,00:30,1,,');
-EQ("linha da Q3", rows[2], '3,,"",,15,00:15,1,,1');
-EQ("linha da Q4 com pagina", rows[3], '4,,"",,50,00:50,1,7-8,');
+EQ("linha da Q1", rows[0], '1,A,5,"Vc F? Vc - FxB",,90,01:30,3,,1');
+EQ("linha da Q2 tipo B", rows[1], '2,B,3,"?",042,30,00:30,1,,');
+EQ("linha da Q3", rows[2], '3,,,"",,15,00:15,1,,1');
+EQ("linha da Q4 com pagina", rows[3], '4,,,"",,50,00:50,1,7-8,');
 EQ("duracao total no bloco",
    head.find(l => l.startsWith("# duracao_total")), "# duracao_total,03:05");
 EQ("Q3 fechada quando o fechamento parou o cronometro", Math.round(times[3]), 15);
@@ -205,6 +205,102 @@ EQ("a conferencia avisa que o tempo e piso",
 select(3); adv(20000); setRunning(false);
 NEAR("segue cronometrando normal depois de retomar", times[3], 20, 0.05);
 EQ("a trilha cresce a partir do que sobrou", log.length + (visit ? 1 : 0), 3);
+
+/* ---- cenário 5: os três eixos de formato ---- */
+const botoes = sel => [...document.querySelectorAll(sel)];
+const clicaNum = (box, n) =>
+  botoes("#" + box + " .numseg button, #" + box + " button")
+    .find(b => b.textContent === String(n)).click();
+
+// eixo fixo no setup: vale para todas e não há o que escolher na questão
+cfgA = 5; cfgME = 4; cfgB = 2; pintaEixos();
+$("nIn").value = "4"; $("startBtn").click();
+select(1); document.querySelector('#typeRow button[data-t="A"]').click();
+EQ("eixo fixo ja nasce com o parametro", ans[1].itens.length, 5);
+EQ("sem seletor por questao quando o eixo e fixo", $("paramRow").style.display, "none");
+select(2); document.querySelector('#typeRow button[data-t="ME"]').click();
+EQ("ME herda as alternativas do setup", ans[2].alt, 4);
+EQ("e so gera A-D", botoes("#answerArea .opts button").map(b => b.textContent).join(" "),
+   "Ac A? Ax Bc B? Bx Cc C? Cx Dc D? Dx —");
+select(3); document.querySelector('#typeRow button[data-t="B"]').click();
+EQ("conta herda os digitos do setup", ans[3].dig, 2);
+botoes("#answerArea .numpad button").find(b => b.textContent === "7").click();
+botoes("#answerArea .numpad button").find(b => b.textContent === "4").click();
+botoes("#answerArea .numpad button").find(b => b.textContent === "9").click();
+EQ("o terceiro digito nao entra com dig=2", ans[3].num, "74");
+
+// eixo em aberto: cada questão declara o seu
+cfgA = 0; cfgME = 0; cfgB = 0; pintaEixos();
+$("nIn").value = "4"; $("startBtn").click();
+select(1); document.querySelector('#typeRow button[data-t="A"]').click();
+EQ("na hora: nasce sem itens", ans[1].itens.length, 0);
+EQ("na hora: parametro indefinido", paramDe(ans[1]), null);
+EQ("na hora: a folha nao abre antes da escolha",
+   botoes("#answerArea .item").length, 0);
+EQ("na hora: o seletor aparece", $("paramRow").style.display, "block");
+EQ("na hora: a grade marca o tipo com ?",
+   document.querySelector('[data-d="1"]').textContent, "A?");
+EQ("na hora: a conferencia cobra a escolha",
+   pendencias().some(p => p.q === 1 && p.txt === "sem itens escolhidos"), true);
+EQ("na hora: incompleta nao conta como respondida", isComplete(1), false);
+EQ("na hora: nao entra na contagem de julgaveis do set", itensDoSet(), 0);
+
+clicaNum("paramRow", 3);
+EQ("escolheu 3 itens", ans[1].itens.length, 3);
+EQ("a folha abriu com 3 itens", botoes("#answerArea .item").length, 3);
+EQ("agora conta 3 julgaveis", itensDoSet(), 3);
+EQ("evento param registrado", events[events.length - 1].ev, "param");
+
+// aumentar não pergunta nada e preserva o que já estava marcado
+botoes("#answerArea .opts button")[0].click();            // Vc no item 1
+clicaNum("paramRow", 6);
+EQ("aumentar preserva a marcacao", itemStr(ans[1].itens[0]), "Vc");
+EQ("aumentar cria itens vazios", ans[1].itens.length, 6);
+
+// reduzir cortando marcação exige confirmação
+botoes("#answerArea .item")[4].querySelectorAll(".opts button")[3].click();  // Fc no item 5
+EQ("item 5 marcado", itemStr(ans[1].itens[4]), "Fc");
+window.__confirmYes = false;
+clicaNum("paramRow", 2);
+EQ("recusar o aviso nao mexe em nada", ans[1].itens.length, 6);
+EQ("e nao perde a marcacao", itemStr(ans[1].itens[4]), "Fc");
+window.__confirmYes = true;
+clicaNum("paramRow", 2);
+EQ("aceitar corta para 2 itens", ans[1].itens.length, 2);
+EQ("o item 1 sobrevive", itemStr(ans[1].itens[0]), "Vc");
+
+// ME na hora: trocar alternativas para menos invalida a resposta
+select(2); document.querySelector('#typeRow button[data-t="ME"]').click();
+EQ("ME na hora nasce sem alt", ans[2].alt, null);
+clicaNum("paramRow", 5);
+botoes("#answerArea .opts button").find(b => b.textContent === "Ec").click();
+EQ("marcou E", itemStr(ans[2].itens[0]), "Ec");
+window.__confirmYes = false;
+clicaNum("paramRow", 3);
+EQ("recusar mantem 5 alternativas", ans[2].alt, 5);
+window.__confirmYes = true;
+clicaNum("paramRow", 3);
+EQ("aceitar reduz e apaga a resposta que sumiu", [ans[2].alt, ans[2].itens[0].r], [3, null]);
+
+// B na hora: número mais longo que o novo limite
+select(3); document.querySelector('#typeRow button[data-t="B"]').click();
+clicaNum("paramRow", 3);
+["1", "2", "3"].forEach(d =>
+  botoes("#answerArea .numpad button").find(b => b.textContent === d).click());
+EQ("digitou 3 digitos", ans[3].num, "123");
+window.__confirmYes = true;
+clicaNum("paramRow", 2);
+EQ("reduzir para 2 corta o numero", ans[3].num, "12");
+EQ("e a resposta do item acompanha", ans[3].itens[0].r, "12");
+
+// o eixo escolhido por questão chega no CSV
+const csv5 = buildCSV().split("\n");
+const cols5 = csv5.find(l => l.startsWith("q,tipo"));
+const r5 = csv5.slice(csv5.indexOf(cols5) + 1);
+EQ("param por questao no CSV", r5.slice(0, 3).map(l => l.split(",").slice(0, 3).join("|")),
+   ["1|A|2", "2|ME|3", "3|B|2"]);
+EQ("o bloco declara o eixo em aberto",
+   csv5.find(l => l.startsWith("# ce_itens")), "# ce_itens,na hora");
 
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +

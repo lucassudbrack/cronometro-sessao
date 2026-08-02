@@ -17,6 +17,10 @@ window.adv = ms => { window.__t += ms; };
 window.__files = [];
 window.__lines = [];
 window.P = (...a) => window.__lines.push(a.join(" "));
+// O headless descarta dialogos, o que responderia "nao" a todo confirm().
+// Aqui o cenario controla a resposta e pode testar os dois lados.
+window.__confirmYes = true;
+window.confirm = () => window.__confirmYes;
 window.__fails = 0;
 window.EQ = (nome, got, want) => {
   const ok = JSON.stringify(got) === JSON.stringify(want);
