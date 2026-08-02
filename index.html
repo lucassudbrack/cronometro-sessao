@@ -691,22 +691,41 @@ function pendencias(){
 }
 function contaFaltas(){ return pendencias().filter(p=>p.tipo==="falta").length; }
 
+// 3, 4, 5, 9 -> "3–5, 9". Corridas de dois ficam listadas, que é mais curto de ler.
+function faixas(ns){
+  const out=[];
+  for(let i=0;i<ns.length;){
+    let j=i; while(j+1<ns.length && ns[j+1]===ns[j]+1) j++;
+    if(j-i>=2){ out.push(ns[i]+"–"+ns[j]); i=j+1; }
+    else { out.push(String(ns[i])); i++; }
+  }
+  return out.join(", ");
+}
 function paintRev(){
   const ps=pendencias();
-  const f=ps.filter(p=>p.tipo==="falta").length, a=ps.length-f;
-  $("revCount").textContent = f+" falta"+(f===1?"":"s")+" · "+a+" aviso"+(a===1?"":"s");
+  const f=ps.filter(p=>p.tipo==="falta"), av=ps.filter(p=>p.tipo==="aviso");
+  $("revCount").textContent = f.length+" falta"+(f.length===1?"":"s")+" · "+
+                              av.length+" aviso"+(av.length===1?"":"s");
   const el=$("revList");
   if(!ps.length){ el.innerHTML='<div class="allok">Nada pendente. Todas as questões visitadas têm tipo, resposta, confiança e página.</div>'; return; }
   el.innerHTML="";
-  ps.forEach(p=>{
+  const linha=(rot,tipo,txt,q)=>{
     const d=document.createElement("div");
-    d.className="prow "+p.tipo;
-    d.innerHTML='<span class="qq">Q'+p.q+'</span><span class="k">'+p.tipo+'</span>'+
-                '<span class="w"></span><span class="go">›</span>';
-    d.querySelector(".w").textContent=p.txt;
-    d.onclick=()=>abrirParaCorrigir(p.q);
+    d.className="prow "+tipo;
+    d.innerHTML='<span class="qq"></span><span class="k">'+tipo+'</span>'+
+                '<span class="w"></span>'+(q?'<span class="go">›</span>':'');
+    d.querySelector(".qq").textContent=rot;
+    d.querySelector(".w").textContent=txt;
+    if(q) d.onclick=()=>abrirParaCorrigir(q); else d.style.cursor="default";
     el.appendChild(d);
-  });
+  };
+  // Falta primeiro: é o que faz a análise perder informação. E as não visitadas
+  // viram uma linha só, senão um set de 40 com 12 feitas afoga o que importa.
+  const naoVis=av.filter(p=>p.txt==="não visitada").map(p=>p.q);
+  f.forEach(p=>linha("Q"+p.q,"falta",p.txt,p.q));
+  av.filter(p=>p.txt!=="não visitada").forEach(p=>linha("Q"+p.q,"aviso",p.txt,p.q));
+  if(naoVis.length) linha("—","aviso",
+    naoVis.length+" não visitadas: "+faixas(naoVis), null);
 }
 function openRev(){
   closeEnd(); revisando=true;

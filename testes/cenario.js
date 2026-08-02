@@ -105,7 +105,12 @@ const passesAntes = passes(1), logAntes = log.length, tAntes = times[1], visitAn
 $("endRev").click();
 EQ("conferencia abriu", $("paneRev").classList.contains("on"), true);
 EQ("modo conferencia ligado", revisando, true);
-$("revList").children[0].click();          // abre a Q1 para corrigir
+const rotulos = () => [...$("revList").children].map(r => r.querySelector(".qq").textContent);
+EQ("faltas primeiro, avisos depois", rotulos().slice(0, 2), ["Q3", "Q4"]);
+EQ("faixas comprime corridas", faixas([3, 4, 5, 9, 11, 12]), "3–5, 9, 11, 12");
+// a Q1 tem só um aviso; abre por ela para conferir que corrigir nao cronometra
+const linhaQ1 = [...$("revList").children].find(r => r.querySelector(".qq").textContent === "Q1");
+linhaQ1.click();
 EQ("abriu o painel da questao", $("paneQ").classList.contains("on"), true);
 EQ("curQ mudou para a questao da pendencia", curQ, 1);
 EQ("cronometro continua parado", running, false);
