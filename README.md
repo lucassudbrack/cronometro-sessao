@@ -118,6 +118,12 @@ A identidade é auto-auditável: se não fechar, há item sem destino.
 
     C_m + E_m + C_B + E_B + S + T = I      (anulado e sem gabarito fora)
 
+Item **sem gabarito fica fora de tudo** — de I, dos pontos e de todos os
+índices. Uma questão que você respondeu mas cuja chave não preencheu some sem
+fazer barulho, então a conferência cobra isso como falta assim que você abre o
+gabarito, e o export declara `gabarito_completo`. `itens_no_set` é o total
+declarado: `I = itens_no_set − anulados − sem_gabarito`.
+
 **Item marcado B rende 0 e tira 0, mas continua no denominador** — ele estava
 em jogo e você não o levou. É isso que normaliza o índice contra a prova, e não
 contra o que você resolveu enfrentar.

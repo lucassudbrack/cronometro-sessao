@@ -1094,6 +1094,12 @@ function tally(){
   return c;
 }
 // Julgáveis da prova: os que existem, brancos incluídos, anulados fora.
+// Todos os itens declarados, anulados incluídos: é o total de onde I é derivado.
+function itensNoSet(){
+  let n=0;
+  for(let q=1;q<=N;q++){ const a=ans[q]; if(!a || paramDe(a)==null) continue; n+=a.itens.length; }
+  return n;
+}
 function itensDoSet(){
   let n=0;
   for(let q=1;q<=N;q++){
@@ -1121,7 +1127,8 @@ function paintGab(){
   t.innerHTML=n(c.ok,"confere","conferem")+" · "+n(c.erro,"diverge","divergem")+" · "+
     n(c.branco,"em branco","em branco")+"<br>"+
     n(c.anulado,"anulado","anulados")+" (fora da prova) · "+
-    n(c.sem,"ainda sem gabarito","ainda sem gabarito")+"<br>"+
+    (c.sem ? "<span style='color:var(--alert)'>"+c.sem+" ainda sem gabarito — some de todos os índices</span>"
+           : "tudo conferido")+"<br>"+
     "<b>"+X.pontos+"</b> de <b>"+X.pontos_em_jogo+"</b> pontos em jogo · real <b>"+pct(X.real)+"</b><br>"+
     "enfrentado <b>"+pct(X.acerto_do_enfrentado)+"</b> · por tempo <b>"+pct(X.branco_por_tempo)+
     "</b> · por conceito <b>"+pct(X.branco_por_conceito)+"</b><br>"+
@@ -1240,6 +1247,14 @@ function pendencias(){
     else{
       if(!(a.num&&a.num.length) && a.itens[0].r!=="-") add(q,"falta","sem número e sem branco");
       else if(a.itens[0].r!=="-" && !a.itens[0].c) add(q,"falta","sem confiança");
+    }
+    // Depois que você começou a preencher o gabarito, questão sem chave é falta:
+    // ela some de I, dos pontos e de todos os índices sem fazer barulho. Foi
+    // assim que 4 dos 5 itens marcados com T sumiram de branco_por_tempo.
+    if(gabAberto && a && paramDe(a)!=null){
+      const sg=a.itens.filter((_,i)=>confere(q,i)==="sem").length;
+      if(sg===a.itens.length) add(q,"falta","sem gabarito — sai de todos os índices");
+      else if(sg) add(q,"falta",sg+(sg>1?" itens":" item")+" sem gabarito");
     }
     if(cronometrar && a && t===0) add(q,"aviso","marcada sem tempo registrado");
 
@@ -1602,8 +1617,13 @@ function buildCSV(){
   L.push("# tipo_sessao,"+csvv(ficha.tipo));
   L.push("# cronometrada,"+(cronometrar?1:0));
   L.push("# itens_da_prova,"+csvv(ficha.itens));
+  const X=indices();
   L.push("# questoes_no_set,"+N);
-  L.push("# itens_julgaveis_no_set,"+itensDoSet());
+  // itens_no_set é o total declarado; I sai dele tirando anulado e sem gabarito.
+  // Antes saía itens_julgaveis_no_set, que contava item sem gabarito e divergia
+  // de I sem dizer por quê — nesta sessão a diferença foi de 5 itens.
+  L.push("# itens_no_set,"+itensNoSet());
+  L.push("# gabarito_completo,"+(X.sem_gabarito?0:1));
   const eixo = v => v===0 ? "na hora" : v;
   L.push("# ce_itens,"+eixo(cfgA));
   L.push("# me_alternativas,"+eixo(cfgME));
@@ -1631,7 +1651,6 @@ function buildCSV(){
   });
   // sem_tempo_* deixou de ser emitido: desde que T força branco, os acertos e
   // erros são sempre 0 e o total é sempre igual à primitiva T.
-  const X=indices();
   L.push("# n_I,"+X.I);
   L.push("# n_opinou,"+X.opinou);
   L.push("# glossario,"+csvv("toda taxa tem o seu n ao lado; 0 com n=1 não é 0 com n=50 · real = líquido normalizado contra a prova · item com B rende 0 e tira 0 mas fica no denominador · S = enfrentei sem palpite · T = não alcancei por tempo"));

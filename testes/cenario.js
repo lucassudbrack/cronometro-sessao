@@ -928,6 +928,56 @@ EQ("e cada linha carrega um dos seis",
    "C_B C_m E_B E_m S T anulado sem_gabarito");
 EQ("os indices saem no bloco do CSV principal", v12("I"), "6");
 
+/* ---- cenário 13: questão sem gabarito não pode sumir em silêncio ---- */
+// Reproduz o que aconteceu na sessão de 02/08: a Q4 ficou sem gabarito e levou
+// 4 dos 5 itens marcados com T embora, derrubando branco_por_tempo de 12% para 3%.
+Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
+idx = []; sid = null;
+$("tpl").value = "bacen"; $("tpl").dispatchEvent(new Event("change"));
+$("mConc").value = "BACEN"; $("mConc").dispatchEvent(new Event("change"));
+$("mMat").value = "Lacuna"; $("mMat").dispatchEvent(new Event("change"));
+$("mSub").value = ""; $("mSub").dispatchEvent(new Event("change"));
+cfgA = 2; pintaEixos();
+$("nIn").value = "2"; apelidos = {}; paintApelidos();
+$("startBtn").click();
+const itn = () => [...document.querySelectorAll("#answerArea .item")];
+const flg = (i, f) => [...itn()[i].querySelectorAll(".flags button")]
+  .find(b => b.textContent === f).click();
+select(1); flg(0, "T"); flg(1, "T");          // Q1: dois itens sem tempo
+select(2); flg(0, "T"); flg(1, "T");          // Q2: idem
+setRunning(false);
+gab[1] = { itens: ["V", "V"], num: "" };      // só a Q1 recebe gabarito
+gabAberto = iso(Date.now());
+
+EQ("os quatro T foram marcados",
+   [1, 2].reduce((s, q) => s + ans[q].itens.filter(i => i.T).length, 0), 4);
+EQ("mas so os da questao com gabarito viram a primitiva T", indices().T, 2);
+EQ("e os outros quatro contam como sem gabarito", indices().sem_gabarito, 2);
+EQ("branco_por_tempo enxerga so metade", indices().branco_por_tempo, 1);
+EQ("a conferencia agora cobra a questao sem gabarito",
+   pendencias().filter(p => p.q === 2 && p.tipo === "falta").map(p => p.txt),
+   ["sem gabarito — sai de todos os índices"]);
+EQ("e ela entra na contagem que trava o export", contaFaltas() > 0, true);
+
+gab[2] = { itens: ["V", null], num: "" };     // preenche metade
+EQ("gabarito parcial tambem e cobrado, com a contagem",
+   pendencias().filter(p => p.q === 2 && p.tipo === "falta").map(p => p.txt),
+   ["1 item sem gabarito"]);
+
+gab[2] = { itens: ["V", "V"], num: "" };
+EQ("completo, a cobranca some", pendencias().filter(p => /gabarito/.test(p.txt)).length, 0);
+EQ("e agora os quatro T aparecem", indices().T, 4);
+EQ("branco_por_tempo passa a dizer a verdade", indices().branco_por_tempo, 1);
+
+const h13 = buildCSV().split(String.fromCharCode(10)).filter(l => l.startsWith("#"));
+const v13 = k => (h13.find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];
+EQ("o bloco declara o gabarito completo", v13("gabarito_completo"), "1");
+EQ("itens_no_set e o total declarado", v13("itens_no_set"), "4");
+EQ("e I sai dele tirando anulado e sem gabarito",
+   +v13("itens_no_set") - +v13("itens_anulados_fora") - +v13("itens_sem_gabarito"), +v13("I"));
+EQ("o contador ambiguo saiu do bloco",
+   h13.some(l => l.startsWith("# itens_julgaveis_no_set")), false);
+
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +
   [...new Set(events.map(e => e.ev))].join(" "));
