@@ -7,11 +7,43 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="./icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
 
 <style>
+  /* Fontes servidas do próprio pacote. Enquanto vinham do Google, a
+     primeira abertura de cada sessão dependia da rede — e o requisito é
+     zero chamada de rede. Os woff2 são variáveis: um arquivo por família
+     e subset serve todos os pesos. */
+  @font-face{font-family:"Archivo";font-style:normal;font-weight:600;font-display:swap;
+    src:url(./fontes/archivo.woff2) format("woff2");
+    unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+  @font-face{font-family:"Archivo";font-style:normal;font-weight:800;font-display:swap;
+    src:url(./fontes/archivo.woff2) format("woff2");
+    unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+  @font-face{font-family:"Archivo";font-style:normal;font-weight:600;font-display:swap;
+    src:url(./fontes/archivo-ext.woff2) format("woff2");
+    unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+  @font-face{font-family:"Archivo";font-style:normal;font-weight:800;font-display:swap;
+    src:url(./fontes/archivo-ext.woff2) format("woff2");
+    unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+  @font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:400;font-display:swap;
+    src:url(./fontes/jetbrains-mono.woff2) format("woff2");
+    unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+  @font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:600;font-display:swap;
+    src:url(./fontes/jetbrains-mono.woff2) format("woff2");
+    unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+  @font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:800;font-display:swap;
+    src:url(./fontes/jetbrains-mono.woff2) format("woff2");
+    unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+  @font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:400;font-display:swap;
+    src:url(./fontes/jetbrains-mono-ext.woff2) format("woff2");
+    unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+  @font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:600;font-display:swap;
+    src:url(./fontes/jetbrains-mono-ext.woff2) format("woff2");
+    unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+  @font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:800;font-display:swap;
+    src:url(./fontes/jetbrains-mono-ext.woff2) format("woff2");
+    unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+
   :root{
     --chassis:#1B2027; --chassis-2:#252C36; --line:#39424E; --sunken:#11151A;
     --paper:#F1F2EF; --mute:#8A94A1; --dim:#4A535E;
@@ -199,6 +231,7 @@
   <div class="stat"><span class="eyebrow">Sessão</span><span class="v" id="total">00:00</span></div>
   <div class="stat"><span class="eyebrow">Média</span><span class="v" id="avg">—</span></div>
   <span class="warn" id="nopersist" title="O aparelho recusou gravar. Exporte antes de fechar.">sem disco</span>
+  <span class="warn" id="nooffline" title="O cache offline não instalou. Não abra um simulado sem rede.">sem offline</span>
   <button id="viewBtn">Trilha</button>
   <button id="expBtn">Fechar</button>
   <button id="newBtn">Nova</button>
@@ -907,10 +940,29 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden && runnin
 })();
 tick();
 
-/* ---------- PWA ---------- */
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+/* ---------- PWA ----------
+   O registro engolia o erro num catch vazio. Foi assim que o service worker
+   passou meses sem instalar (a lista de precache citava ícones que não
+   existiam, e addAll é atômico) sem que nada aparecesse na tela. Agora falha
+   de offline acende no rodapé, do mesmo jeito que falha de disco.            */
+function semOffline(motivo){
+  $("nooffline").style.display="block";
+  console.warn("[app] sem offline:", motivo);
+}
+if(location.protocol==="file:"){
+  /* aberto direto do disco: service worker nem existe, e não é cenário de uso */
+} else if(!("serviceWorker" in navigator)){
+  semOffline("navegador sem service worker");
+} else {
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("./sw.js").then(r=>{
+      // Registrar não é instalar. Se o precache falhar, o worker vai a
+      // redundant e é aí que o app deixa de funcionar offline.
+      const w=r.installing||r.waiting;
+      if(w) w.addEventListener("statechange",()=>{
+        if(w.state==="redundant") semOffline("instalação do cache falhou");
+      });
+    }).catch(e=>semOffline(e && e.message || e));
   });
 }
 </script>
