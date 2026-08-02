@@ -1,0 +1,557 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sessão</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#1B2027">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --chassis:#1B2027; --chassis-2:#252C36; --line:#39424E; --sunken:#11151A;
+    --paper:#F1F2EF; --mute:#8A94A1; --dim:#4A535E;
+    --brass:#D3922F; --teal:#3C807A; --alert:#B04A3E;
+    --mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ui:"Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%; overscroll-behavior:none}
+  body{margin:0; background:var(--chassis); color:var(--paper); font-family:var(--ui);
+    display:flex; flex-direction:column; height:100dvh; overflow:hidden; user-select:none}
+  .eyebrow{font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--mute); font-weight:600}
+  button{font-family:var(--ui); font-weight:600; color:var(--paper); background:var(--chassis-2);
+    border:1px solid var(--line); border-radius:3px; cursor:pointer; font-size:11px;
+    letter-spacing:.05em; text-transform:uppercase; padding:9px 10px}
+  button:active{background:#313A46}
+  button:focus-visible{outline:2px solid var(--brass); outline-offset:2px}
+  button.primary{background:var(--brass); border-color:var(--brass); color:#1B1406}
+  input{font-family:var(--mono); background:var(--sunken); color:var(--paper);
+    border:1px solid var(--line); border-radius:3px; padding:8px; font-size:13px; width:100%}
+
+  .head{display:flex; align-items:center; gap:10px; padding:10px 12px;
+    background:linear-gradient(180deg,var(--chassis-2),var(--chassis)); border-bottom:1px solid var(--line)}
+  .badge{font-family:var(--mono); font-weight:800; font-size:20px; line-height:1;
+    width:44px; height:44px; flex:0 0 44px; display:flex; align-items:center; justify-content:center;
+    border:2px solid var(--brass); border-radius:4px; color:var(--brass)}
+  .badge.idle{border-color:var(--line); color:var(--dim)}
+  .headtxt{flex:1; min-width:0; display:flex; flex-direction:column; gap:1px}
+  .clock{font-family:var(--mono); font-weight:800; font-size:28px; line-height:1; letter-spacing:-.02em; color:var(--brass)}
+  .clock .dec{font-size:14px; opacity:.6}
+  body.running .clock .colon{animation:blink 1s steps(1,end) infinite}
+  @keyframes blink{50%{opacity:.25}}
+  body.paused .clock{color:var(--mute)}
+  .head button{flex:0 0 auto}
+
+  .pane{flex:1; overflow:auto; padding:10px; display:none}
+  .pane.on{display:block}
+
+  /* grade */
+  #grid{display:grid; gap:6px; grid-template-columns:repeat(auto-fill,minmax(60px,1fr)); align-content:start}
+  .q{position:relative; aspect-ratio:1; background:var(--chassis-2); border:1px solid var(--line);
+    border-radius:4px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px}
+  .q .n{font-family:var(--mono); font-weight:800; font-size:17px}
+  .q .t{font-family:var(--mono); font-size:9px; color:var(--mute)}
+  .q.done{border-color:var(--dim)}
+  .q.answered{background:#1F2A2A; border-color:var(--teal)}
+  .q.active{border-color:var(--brass); background:#2E2718}
+  .q.over .t{color:var(--alert)}
+  .q .passes{position:absolute; top:3px; right:4px; font-family:var(--mono); font-size:8px; color:var(--brass)}
+  .q .dot{position:absolute; bottom:3px; left:0; right:0; text-align:center;
+    font-family:var(--mono); font-size:7px; letter-spacing:.08em; color:var(--teal)}
+
+  /* questao */
+  .qhead{display:flex; align-items:center; gap:8px; margin-bottom:10px}
+  .qhead .sp{flex:1}
+  .typerow{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:12px}
+  .typerow button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
+
+  .item{border:1px solid var(--line); border-radius:4px; padding:7px; margin-bottom:6px; background:var(--chassis-2)}
+  .itemlab{font-family:var(--mono); font-size:10px; color:var(--mute); margin-bottom:5px; display:flex; gap:8px; align-items:center}
+  .opts{display:flex; gap:3px}
+  .opts button{flex:1; padding:10px 2px; font-family:var(--mono); font-size:12px; text-transform:none; letter-spacing:0}
+  .opts button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
+  .opts .sep{flex:0 0 5px}
+  .flags{display:flex; gap:3px; margin-left:6px}
+  .flags button{flex:0 0 34px; padding:10px 0; font-family:var(--mono); font-size:11px; text-transform:none}
+  .flags button.sel{background:var(--alert); border-color:var(--alert)}
+  .row{display:flex; align-items:stretch}
+
+  .numpad{display:grid; grid-template-columns:repeat(5,1fr); gap:5px; margin-top:6px}
+  .numpad button{padding:14px 0; font-family:var(--mono); font-size:15px}
+  .numdisp{font-family:var(--mono); font-size:30px; text-align:center; letter-spacing:.16em;
+    background:var(--sunken); border:1px solid var(--line); border-radius:4px; padding:10px; color:var(--brass)}
+
+  /* trilha */
+  .lrow{display:flex; gap:8px; align-items:center; padding:6px 4px; border-bottom:1px solid var(--line); font-size:11px}
+  .lrow .s{font-family:var(--mono); color:var(--dim); width:22px}
+  .lrow .qq{font-family:var(--mono); font-weight:800; width:34px}
+  .lrow .w{flex:1; color:var(--mute); font-family:var(--mono); font-size:10px}
+  .lrow .d{font-family:var(--mono); color:var(--brass)}
+  .lrow.live{background:#2E2718}
+  .empty{color:var(--dim); font-size:11px; padding:12px 4px}
+
+  .foot{display:flex; gap:6px; align-items:center; padding:8px 10px; border-top:1px solid var(--line); background:var(--chassis-2)}
+  .stat{display:flex; flex-direction:column; gap:1px; margin-right:4px}
+  .stat .v{font-family:var(--mono); font-weight:800; font-size:13px}
+  .foot button{padding:8px 9px; font-size:10px}
+
+  .setup{position:absolute; inset:0; background:var(--chassis); z-index:5; display:flex;
+    flex-direction:column; justify-content:center; gap:12px; padding:20px; overflow:auto}
+  .setup h1{font-size:19px; font-weight:800; margin:0; letter-spacing:-.01em}
+  .setup p{margin:0; font-size:12px; line-height:1.55; color:var(--mute)}
+  .field{display:flex; flex-direction:column; gap:5px}
+  .seg{display:grid; grid-template-columns:repeat(2,1fr); gap:6px}
+  .seg button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
+  .setup.hide{display:none}
+  .toast{position:fixed; left:50%; bottom:64px; transform:translateX(-50%); background:var(--teal);
+    color:#fff; font-size:12px; font-weight:600; padding:8px 14px; border-radius:20px; opacity:0;
+    transition:opacity .2s; pointer-events:none; z-index:9}
+  .toast.on{opacity:1}
+</style>
+
+<div class="head">
+  <div class="badge idle" id="badge">—</div>
+  <div class="headtxt">
+    <span class="eyebrow" id="label">nenhuma questão ativa</span>
+    <span class="clock" id="clock">00:00<span class="dec">.0</span></span>
+  </div>
+  <button id="toggle">Pausar</button>
+</div>
+
+<div class="pane on" id="paneGrid"><div id="grid"></div></div>
+
+<div class="pane" id="paneQ">
+  <div class="qhead">
+    <button id="prevBtn">◀</button>
+    <div class="sp"></div>
+    <button id="backBtn">Grade</button>
+    <div class="sp"></div>
+    <button id="nextBtn">▶</button>
+  </div>
+  <span class="eyebrow">Tipo da questão</span>
+  <div class="typerow" id="typeRow">
+    <button data-t="A">C / E</button>
+    <button data-t="ME">Múltipla</button>
+    <button data-t="B">Conta</button>
+  </div>
+  <div id="answerArea"></div>
+</div>
+
+<div class="pane" id="paneLog"></div>
+
+<div class="foot">
+  <div class="stat"><span class="eyebrow">Sessão</span><span class="v" id="total">00:00</span></div>
+  <div class="stat"><span class="eyebrow">Média</span><span class="v" id="avg">—</span></div>
+  <button id="viewBtn">Trilha</button>
+  <button id="expBtn">Exportar</button>
+  <button id="newBtn">Nova</button>
+</div>
+
+<div class="setup" id="setup">
+  <div>
+    <h1>Sessão cronometrada</h1>
+    <p>Toque no número da questão que está resolvendo — o relógio da anterior para no mesmo instante. Marque a resposta ali mesmo.</p>
+  </div>
+  <div class="field"><span class="eyebrow">Quantas questões</span><input id="nIn" value="15" inputmode="numeric"></div>
+  <div class="field">
+    <span class="eyebrow">Questões C/E têm quantos itens</span>
+    <div class="seg" id="segItens">
+      <button data-v="5">5 itens (ANPEC)</button>
+      <button data-v="1">1 item (Cebraspe)</button>
+    </div>
+  </div>
+  <div class="field">
+    <span class="eyebrow">Múltipla escolha — alternativas</span>
+    <div class="seg" id="segAlt">
+      <button data-v="5">5 (A–E)</button>
+      <button data-v="4">4 (A–D)</button>
+    </div>
+  </div>
+  <div class="field"><span class="eyebrow">Meta por questão (min) — opcional</span><input id="goalIn" placeholder="4" inputmode="decimal"></div>
+  <div class="field"><span class="eyebrow">Rótulo da sessão — opcional</span><input id="tagIn" placeholder="Estatistica · Series · ANPEC 2014"></div>
+  <button class="primary" id="startBtn" style="padding:13px">Começar</button>
+  <p id="resumeNote" style="display:none"></p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const KEY = "sessao:v1";
+const store = (typeof window!=="undefined" && window.storage) ? window.storage : (function(){
+  try{ const t="__t"; localStorage.setItem(t,"1"); localStorage.removeItem(t);
+    return { get:async k=>{ const v=localStorage.getItem(k); if(v===null) throw 0; return {value:v}; },
+             set:async (k,v)=>{ localStorage.setItem(k,v); return {key:k}; } };
+  }catch(e){ return null; }
+})();
+
+let N=15, goal=0, nItens=5, nAlt=5, tag="";
+let times={}, log=[], visit=null, ans={}, events=[];
+let running=false, segStart=null, sessionAccum=0, sessionStart=null, started=false, curQ=null;
+
+const now=()=>performance.now();
+function fmt(s){ if(s==null||isNaN(s)) return "—";
+  const t=Math.max(0,s), h=Math.floor(t/3600), m=Math.floor(t%3600/60), sec=Math.floor(t%60);
+  const p=n=>String(n).padStart(2,"0");
+  return h? h+":"+p(m)+":"+p(sec) : p(m)+":"+p(sec); }
+const iso=d=>new Date(d).toISOString();
+const hhmm=d=>new Date(d).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+const elapsed=()=> (running&&segStart!==null) ? (now()-segStart)/1000 : 0;
+const visitLive=()=> visit ? visit.sec+elapsed() : 0;
+const qLive=q=> (times[q]||0) + (visit&&visit.q===q ? elapsed() : 0);
+const sessionLive=()=> sessionAccum + (running&&sessionStart!==null ? (now()-sessionStart)/1000 : 0);
+const passes=q=> log.filter(v=>v.q===q).length + (visit&&visit.q===q?1:0);
+
+function ev(o){ events.push(Object.assign({t:iso(Date.now())},o)); }
+
+function blankAns(tipo){
+  if(tipo==="A")  return {tipo:"A",  itens:Array.from({length:nItens},()=>({r:null,c:null,B:false,T:false}))};
+  if(tipo==="ME") return {tipo:"ME", itens:[{r:null,c:null,B:false,T:false}]};
+  return              {tipo:"B",  itens:[{r:null,c:null,B:false,T:false}], num:""};
+}
+
+/* ---------- cronometro ---------- */
+function commit(){ if(segStart===null) return;
+  const d=(now()-segStart)/1000;
+  if(visit){ visit.sec+=d; times[visit.q]=(times[visit.q]||0)+d; }
+  segStart=null; }
+
+function setRunning(on){
+  if(on===running) return;
+  if(on){ running=true; segStart=now(); sessionStart=now(); wake(); ev({ev:"resume"}); }
+  else{ commit(); if(sessionStart!==null){ sessionAccum+=(now()-sessionStart)/1000; sessionStart=null; }
+        running=false; unwake(); ev({ev:"pause"}); }
+  document.body.classList.toggle("running",running);
+  document.body.classList.toggle("paused",!running && !!visit);
+  $("toggle").textContent = running ? "Pausar" : "Retomar";
+  $("toggle").classList.toggle("primary", !running);
+  paint();
+}
+let wl=null;
+async function wake(){ try{ if("wakeLock" in navigator && !wl) wl=await navigator.wakeLock.request("screen"); }catch(e){} }
+function unwake(){ try{ if(wl){ wl.release(); wl=null; } }catch(e){} }
+
+function select(q, keepPane){
+  if(visit && visit.q===q){ if(!keepPane) openQ(q); return; }
+  commit();
+  if(visit){ log.push(visit); ev({ev:"leave", q:visit.q, sec:Math.round(visit.sec)}); }
+  visit={q:q, at:Date.now(), sec:0};
+  ev({ev:"enter", q:q, passada:passes(q)});
+  if(!running){ running=true; sessionStart=now(); document.body.classList.add("running");
+    document.body.classList.remove("paused"); $("toggle").textContent="Pausar";
+    $("toggle").classList.remove("primary"); wake(); }
+  segStart=now();
+  if(!keepPane) openQ(q);
+  paint(); save();
+}
+
+/* ---------- panes ---------- */
+function showPane(id){
+  ["paneGrid","paneQ","paneLog"].forEach(p=>$(p).classList.toggle("on", p===id));
+  $("viewBtn").textContent = id==="paneLog" ? "Grade" : "Trilha";
+}
+function openQ(q){ curQ=q; renderQ(); showPane("paneQ"); }
+
+/* ---------- grade ---------- */
+function buildGrid(){
+  const g=$("grid"); g.innerHTML="";
+  for(let i=1;i<=N;i++){
+    const d=document.createElement("div");
+    d.className="q"; d.dataset.q=i;
+    d.innerHTML='<span class="n">'+i+'</span><span class="t" data-t="'+i+'">–</span>'+
+                '<span class="passes" data-p="'+i+'"></span><span class="dot" data-d="'+i+'"></span>';
+    d.addEventListener("click",()=>select(i));
+    g.appendChild(d);
+  }
+}
+function answeredCount(q){
+  const a=ans[q]; if(!a) return 0;
+  if(a.tipo==="B") return (a.num&&a.num.length)||a.itens[0].r==="-" ? 1 : 0;
+  return a.itens.filter(it=>it.r!==null).length;
+}
+function isComplete(q){
+  const a=ans[q]; if(!a) return false;
+  if(a.tipo==="A")  return a.itens.every(it=>it.r!==null);
+  if(a.tipo==="ME") return a.itens[0].r!==null;
+  return (a.num&&a.num.length>0) || a.itens[0].r==="-";
+}
+function paint(){
+  for(let i=1;i<=N;i++){
+    const el=document.querySelector('.q[data-q="'+i+'"]'); if(!el) continue;
+    const t=qLive(i), has=t>0;
+    el.classList.toggle("active", !!visit && visit.q===i);
+    el.classList.toggle("done", has && !(visit&&visit.q===i));
+    el.classList.toggle("answered", isComplete(i));
+    el.classList.toggle("over", goal>0 && t>goal);
+    el.querySelector('[data-t="'+i+'"]').textContent = has? fmt(t) : "–";
+    const p=passes(i);
+    el.querySelector('[data-p="'+i+'"]').textContent = p>1 ? "×"+p : "";
+    const a=ans[i];
+    el.querySelector('[data-d="'+i+'"]').textContent = a ? (a.tipo==="A" ? answeredCount(i)+"/"+nItens : a.tipo) : "";
+  }
+  $("badge").textContent = visit ? visit.q : "—";
+  $("badge").classList.toggle("idle", !visit);
+  $("label").textContent = visit ? ("questão "+visit.q+(passes(visit.q)>1? " · "+passes(visit.q)+"ª passada":"")) : "toque em um número para começar";
+  const done=Object.keys(times).filter(q=>times[q]>0);
+  $("avg").textContent = done.length ? fmt(done.reduce((a,q)=>a+times[q],0)/done.length) : "—";
+  if($("paneLog").classList.contains("on")) paintLog();
+}
+
+/* ---------- painel de resposta ---------- */
+function renderQ(){
+  const q=curQ;
+  $("badge").textContent=q;
+  document.querySelectorAll("#typeRow button").forEach(b=>
+    b.classList.toggle("sel", ans[q] && ans[q].tipo===b.dataset.t));
+  const area=$("answerArea");
+  if(!ans[q]){ area.innerHTML='<p style="color:var(--dim);font-size:12px;margin:14px 2px">Escolha o tipo para abrir a folha.</p>'; return; }
+  const a=ans[q];
+  if(a.tipo==="B"){ renderB(area,a); return; }
+  const letters = a.tipo==="ME" ? ["A","B","C","D","E"].slice(0,nAlt) : ["V","F"];
+  area.innerHTML="";
+  a.itens.forEach((it,idx)=>{
+    const box=document.createElement("div"); box.className="item";
+    const lab=document.createElement("div"); lab.className="itemlab";
+    lab.textContent = a.tipo==="ME" ? "alternativa" : ("item "+(idx+1));
+    box.appendChild(lab);
+    const row=document.createElement("div"); row.className="row";
+    const opts=document.createElement("div"); opts.className="opts";
+    letters.forEach((L,li)=>{
+      ["c","?","x"].forEach(cf=>{
+        const b=document.createElement("button");
+        b.textContent=L+cf;
+        b.className = (it.r===L && it.c===cf) ? "sel" : "";
+        b.onclick=()=>{ it.r=L; it.c=cf; ev({ev:"mark",q:q,item:idx+1,resp:L,conf:cf}); renderQ(); paint(); save(); };
+        opts.appendChild(b);
+      });
+      if(li<letters.length-1){ const s=document.createElement("div"); s.className="sep"; opts.appendChild(s); }
+    });
+    const bl=document.createElement("button");
+    bl.textContent="—"; bl.className = it.r==="-" ? "sel" : "";
+    bl.onclick=()=>{ it.r="-"; it.c=null; ev({ev:"mark",q:q,item:idx+1,resp:"-"}); renderQ(); paint(); save(); };
+    opts.appendChild(bl);
+    row.appendChild(opts);
+    const fl=document.createElement("div"); fl.className="flags";
+    [["B","B"],["T","T"]].forEach(([k,txt])=>{
+      const b=document.createElement("button");
+      b.textContent=txt; b.className = it[k] ? "sel" : "";
+      b.onclick=()=>{ it[k]=!it[k]; ev({ev:"flag",q:q,item:idx+1,flag:k,on:it[k]}); renderQ(); paint(); save(); };
+      fl.appendChild(b);
+    });
+    row.appendChild(fl);
+    box.appendChild(row);
+    area.appendChild(box);
+  });
+}
+function renderB(area,a){
+  const q=curQ, it=a.itens[0];
+  area.innerHTML="";
+  const disp=document.createElement("div"); disp.className="numdisp";
+  disp.textContent = it.r==="-" ? "—" : (a.num||"___").padStart(3,"_");
+  area.appendChild(disp);
+  const pad=document.createElement("div"); pad.className="numpad";
+  for(let d=0;d<=9;d++){
+    const b=document.createElement("button"); b.textContent=d;
+    b.onclick=()=>{ if(a.num.length<3){ a.num+=d; it.r=a.num; ev({ev:"digit",q:q,d:d});
+      renderQ(); paint(); save(); } };
+    pad.appendChild(b);
+  }
+  const del=document.createElement("button"); del.textContent="←";
+  del.onclick=()=>{ a.num=a.num.slice(0,-1); it.r=a.num||null; renderQ(); paint(); save(); };
+  pad.appendChild(del);
+  const bl=document.createElement("button"); bl.textContent="—";
+  bl.className = it.r==="-" ? "primary" : "";
+  bl.onclick=()=>{ a.num=""; it.r="-"; it.c=null; ev({ev:"mark",q:q,resp:"-"}); renderQ(); paint(); save(); };
+  pad.appendChild(bl);
+  area.appendChild(pad);
+
+  const box=document.createElement("div"); box.className="item"; box.style.marginTop="10px";
+  const lab=document.createElement("div"); lab.className="itemlab"; lab.textContent="confiança";
+  box.appendChild(lab);
+  const row=document.createElement("div"); row.className="row";
+  const opts=document.createElement("div"); opts.className="opts";
+  [["c","certeza"],["?","dúvida"],["x","chute"]].forEach(([cf,nm])=>{
+    const b=document.createElement("button"); b.textContent=cf+" "+nm;
+    b.className = it.c===cf ? "sel" : "";
+    b.onclick=()=>{ it.c=cf; ev({ev:"conf",q:q,conf:cf}); renderQ(); save(); };
+    opts.appendChild(b);
+  });
+  row.appendChild(opts);
+  const fl=document.createElement("div"); fl.className="flags";
+  [["B","B"],["T","T"]].forEach(([k,txt])=>{
+    const b=document.createElement("button"); b.textContent=txt;
+    b.className = it[k] ? "sel" : "";
+    b.onclick=()=>{ it[k]=!it[k]; ev({ev:"flag",q:q,flag:k,on:it[k]}); renderQ(); save(); };
+    fl.appendChild(b);
+  });
+  row.appendChild(fl);
+  box.appendChild(row);
+  area.appendChild(box);
+}
+
+/* ---------- trilha ---------- */
+function paintLog(){
+  const all=log.concat(visit?[visit]:[]);
+  const el=$("paneLog");
+  if(!all.length){ el.innerHTML='<div class="empty">A trilha guarda cada passada na ordem em que você entrou.</div>'; return; }
+  const seen={};
+  el.innerHTML=all.map((v,i)=>{
+    seen[v.q]=(seen[v.q]||0)+1;
+    const live=(v===visit);
+    return '<div class="lrow'+(live?" live":"")+'"><span class="s">'+(i+1)+'</span>'+
+      '<span class="qq">Q'+v.q+'</span>'+
+      '<span class="w">'+hhmm(v.at)+(seen[v.q]>1?" · "+seen[v.q]+"ª volta":"")+'</span>'+
+      '<span class="d"'+(live?' data-livevisit="1"':'')+'>'+fmt(live?visitLive():v.sec)+'</span></div>';
+  }).join("");
+  el.scrollTop=el.scrollHeight;
+}
+function tick(){
+  const v=visitLive();
+  $("clock").innerHTML = fmt(v).replace(":",'<span class="colon">:</span>')+'<span class="dec">.'+Math.floor((v%1)*10)+'</span>';
+  $("total").textContent = fmt(sessionLive());
+  if(visit){
+    const c=document.querySelector('[data-t="'+visit.q+'"]'); if(c) c.textContent=fmt(qLive(visit.q));
+    const l=document.querySelector('[data-livevisit]'); if(l) l.textContent=fmt(v);
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ---------- persistencia ---------- */
+let st=null;
+function save(){
+  if(!store) return;
+  clearTimeout(st);
+  st=setTimeout(async()=>{ try{
+    await store.set(KEY, JSON.stringify({N,goal,nItens,nAlt,tag,times,log,visit,ans,events,
+      sessionAccum:sessionLive(),ts:Date.now()}));
+  }catch(e){} },900);
+}
+async function restore(){ if(!store) return null;
+  try{ const r=await store.get(KEY); return r?JSON.parse(r.value):null; }catch(e){ return null; } }
+
+/* ---------- export ---------- */
+function itemStr(it){
+  if(it.r===null) return "";
+  if(it.r==="-") return "-";
+  return it.r + (it.c||"") + (it.B?"B":"") + (it.T?"T":"");
+}
+function buildCSV(){
+  commit(); if(running) segStart=now();
+  const L=[];
+  L.push("chave,valor");
+  L.push("# sessao,"+new Date().toISOString().slice(0,10));
+  L.push("# rotulo,"+(tag||""));
+  L.push("# questoes,"+N);
+  L.push("# itens_ce_por_questao,"+nItens);
+  L.push("# alternativas_me,"+nAlt);
+  L.push("# duracao_total,"+fmt(sessionLive()));
+  L.push("# gerado_por,app sessao v1");
+  L.push("q,tipo,itens,numerica,segundos,mmss,passadas");
+  for(let q=1;q<=N;q++){
+    const a=ans[q]; const t=times[q]||0;
+    if(!a && !t) continue;
+    const tipo=a?a.tipo:"";
+    const itens = a && a.tipo!=="B" ? a.itens.map(itemStr).join(" ").trim() : (a?itemStr(a.itens[0]).replace(/^[0-9]+/,""):"");
+    const num = a && a.tipo==="B" ? (a.num||(a.itens[0].r==="-"?"-":"")) : "";
+    L.push([q,tipo,'"'+itens+'"',num,Math.round(t),fmt(t),passes(q)].join(","));
+  }
+  return L.join("\n");
+}
+function buildJSONL(){
+  const all=log.concat(visit?[visit]:[]);
+  const lines=[JSON.stringify({t:iso(Date.now()),ev:"meta",rotulo:tag,questoes:N,itens_ce:nItens,alternativas_me:nAlt})];
+  all.forEach((v,i)=>lines.push(JSON.stringify({t:iso(v.at),ev:"passada",ordem:i+1,q:v.q,seg:Math.round(v.sec)})));
+  events.forEach(e=>lines.push(JSON.stringify(e)));
+  return lines.join("\n");
+}
+function dl(name,txt,mime){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([txt],{type:mime}));
+  a.download=name; a.click();
+}
+$("expBtn").onclick=()=>{
+  const stamp=new Date().toISOString().slice(0,16).replace(/[:T]/g,"");
+  dl("sessao-"+stamp+".csv","\ufeff"+buildCSV(),"text/csv");
+  setTimeout(()=>dl("eventos-"+stamp+".jsonl",buildJSONL(),"application/x-ndjson"),350);
+  toast("CSV + trilha exportados");
+};
+let tt;
+function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("on"); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove("on"),1500); }
+
+/* ---------- eventos de UI ---------- */
+$("toggle").onclick=()=>{ if(!visit) return; setRunning(!running); };
+$("viewBtn").onclick=()=>{ showPane($("paneLog").classList.contains("on") ? "paneGrid" : "paneLog"); paint(); };
+$("backBtn").onclick=()=>showPane("paneGrid");
+$("prevBtn").onclick=()=>{ if(curQ>1) select(curQ-1); };
+$("nextBtn").onclick=()=>{ if(curQ<N) select(curQ+1); };
+document.querySelectorAll("#typeRow button").forEach(b=>b.onclick=()=>{
+  const t=b.dataset.t;
+  if(ans[curQ] && ans[curQ].tipo!==t && !confirm("Trocar o tipo apaga as marcações desta questão. Continuar?")) return;
+  ans[curQ]=blankAns(t); ev({ev:"tipo",q:curQ,tipo:t}); renderQ(); paint(); save();
+});
+$("newBtn").onclick=()=>{ if(started && !confirm("Encerrar esta sessão e começar outra?")) return;
+  setRunning(false); $("setup").classList.remove("hide"); started=false; };
+
+function seg(id,cur,cb){
+  document.querySelectorAll("#"+id+" button").forEach(b=>{
+    b.classList.toggle("sel", +b.dataset.v===cur);
+    b.onclick=()=>{ cb(+b.dataset.v); seg(id,+b.dataset.v,cb); };
+  });
+}
+seg("segItens",5,v=>nItens=v);
+seg("segAlt",5,v=>nAlt=v);
+
+$("startBtn").onclick=()=>{
+  const n=parseInt($("nIn").value,10);
+  if(!n||n<1||n>300){ $("nIn").focus(); return; }
+  const g=parseFloat(String($("goalIn").value).replace(",","."));
+  N=n; goal = g>0 ? g*60 : 0; tag=$("tagIn").value.trim();
+  times={}; log=[]; visit=null; ans={}; events=[]; sessionAccum=0; sessionStart=null; running=false;
+  document.body.classList.remove("running","paused"); $("toggle").textContent="Pausar";
+  started=true; ev({ev:"start",questoes:N,itens_ce:nItens,alternativas_me:nAlt,rotulo:tag});
+  buildGrid(); paint(); save(); showPane("paneGrid");
+  $("setup").classList.add("hide");
+};
+
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT") return;
+  if(e.code==="Space"){ e.preventDefault(); if(visit) setRunning(!running); }
+  if(e.key==="ArrowRight" && curQ && curQ<N){ e.preventDefault(); select(curQ+1); }
+  if(e.key==="ArrowLeft"  && curQ && curQ>1){ e.preventDefault(); select(curQ-1); }
+});
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden && running) wake(); });
+
+(async()=>{
+  const prev=await restore();
+  if(prev && (Object.keys(prev.times||{}).length || (prev.log&&prev.log.length))){
+    const when=new Date(prev.ts||Date.now()).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    const note=$("resumeNote");
+    note.style.display="block";
+    note.innerHTML='Há uma sessão de '+when+' com '+prev.N+' questões. <a href="#" id="resumeLink" style="color:var(--brass)">Retomar</a>';
+    $("nIn").value=prev.N;
+    if(prev.goal) $("goalIn").value=prev.goal/60;
+    if(prev.tag) $("tagIn").value=prev.tag;
+    $("resumeLink").onclick=e=>{
+      e.preventDefault();
+      N=prev.N; goal=prev.goal||0; nItens=prev.nItens||5; nAlt=prev.nAlt||5; tag=prev.tag||"";
+      times=prev.times||{}; log=prev.log||[]; ans=prev.ans||{}; events=prev.events||[];
+      if(prev.visit) log.push(prev.visit);
+      visit=null; sessionAccum=prev.sessionAccum||0; sessionStart=null; running=false; started=true;
+      buildGrid(); paint(); showPane("paneGrid"); $("setup").classList.add("hide");
+    };
+  }
+})();
+tick();
+
+/* ---------- PWA ---------- */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+</script>
