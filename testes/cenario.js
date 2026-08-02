@@ -90,8 +90,6 @@ EQ("fechar para o cronometro", running, false);
 EQ("folha de fechamento abriu", $("endSheet").classList.contains("hide"), false);
 EQ("o fechamento mostra a identificacao pronta",
    $("identResumo").textContent, "20260802_anpec_estatistica_prova_pdf_misto");
-$("mItensCalc").click();
-EQ("itens do set = 5 (tipo A) + 1 (tipo B)", ficha.itens, "6");
 $("olharGrid").children[0].click();
 $("olharGrid").children[2].click();
 EQ("olhar registrado", olharList(), [1, 3]);
@@ -288,12 +286,12 @@ EQ("na hora: a grade marca o tipo com ?",
 EQ("na hora: a conferencia cobra a escolha",
    pendencias().some(p => p.q === 1 && p.txt === "sem itens escolhidos"), true);
 EQ("na hora: incompleta nao conta como respondida", isComplete(1), false);
-EQ("na hora: nao entra na contagem de julgaveis do set", itensDoSet(), 0);
+EQ("na hora: nao entra na contagem de itens do set", itensNoSet(), 0);
 
 clicaNum("paramRow", 3);
 EQ("escolheu 3 itens", ans[1].itens.length, 3);
 EQ("a folha abriu com 3 itens", botoes("#answerArea .item").length, 3);
-EQ("agora conta 3 julgaveis", itensDoSet(), 3);
+EQ("agora conta 3 itens", itensNoSet(), 3);
 EQ("evento param registrado", events[events.length - 1].ev, "param");
 
 // aumentar não pergunta nada e preserva o que já estava marcado
@@ -426,10 +424,11 @@ EQ("conta confere", confere(3, 0), "ok");
 EQ("o numero do gabarito ficou", gab[3].num, "42");
 
 // anulada tira o item da contagem de julgáveis da prova
-EQ("julgaveis antes de anular", itensDoSet(), 5);   // 3 (A) + 1 (ME) + 1 (B)
+EQ("itens declarados no set", itensNoSet(), 5);   // 3 (A) + 1 (ME) + 1 (B)
 clicaGab(1, 1, "X");
 EQ("item anulado", confere(1, 1), "anulado");
-EQ("anulado sai da contagem de julgaveis", itensDoSet(), 4);
+EQ("anulado sai de I, mas nao de itens_no_set",
+   [indices().I, itensNoSet()], [4, 5]);
 EQ("contagem crua", (c => [c.ok, c.erro, c.branco, c.anulado, c.sem])(tally()),
    [2, 1, 1, 1, 0]);
 
@@ -977,6 +976,90 @@ EQ("e I sai dele tirando anulado e sem gabarito",
    +v13("itens_no_set") - +v13("itens_anulados_fora") - +v13("itens_sem_gabarito"), +v13("I"));
 EQ("o contador ambiguo saiu do bloco",
    h13.some(l => l.startsWith("# itens_julgaveis_no_set")), false);
+
+/* ---- cenário 14: tempo de prova trava a folha ---- */
+Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
+idx = []; sid = null;
+$("tpl").value = "bacen"; $("tpl").dispatchEvent(new Event("change"));
+$("mConc").value = "BACEN"; $("mConc").dispatchEvent(new Event("change"));
+$("mMat").value = "Relogio"; $("mMat").dispatchEvent(new Event("change"));
+cfgA = 2; pintaEixos();
+$("nIn").value = "3"; apelidos = {}; paintApelidos();
+$("limIn").value = "2";            // dois minutos de prova
+$("startBtn").click();
+EQ("o limite entrou em segundos", limite, 120);
+EQ("e o start registrou", events.find(e => e.ev === "start").tempo_de_prova_seg, 120);
+
+select(1); adv(50000);
+EQ("antes do limite nao trava", travado, false);
+EQ("o rodape mostra o que resta", (tick(), $("total").textContent), "01:10");
+EQ("com o rotulo trocado", $("rotTotal").textContent, "Restam");
+const bt = () => [...document.querySelectorAll("#answerArea .opts button")];
+bt().find(b => b.textContent === "Vc").click();
+EQ("da para marcar antes do limite", ans[1].itens[0].r, "V");
+
+adv(80000);                        // passa dos 2 min
+tick();
+EQ("estourou e travou", travado, true);
+EQ("o cronometro parou", running, false);
+EQ("a folha de fim apareceu", $("fimSheet").classList.contains("hide"), false);
+EQ("o corpo marca o travamento", document.body.classList.contains("travado"), true);
+EQ("e virou evento", events.some(e => e.ev === "tempo_esgotado"), true);
+EQ("o evento leva o limite e a duracao",
+   (e => [e.limite_seg, e.duracao_seg >= 120])(events.find(e => e.ev === "tempo_esgotado")),
+   [120, true]);
+EQ("o restante zera e nao fica negativo", restante(), 0);
+
+// travado: a folha não aceita mais nada
+$("fimVer").click();
+select(2);
+EQ("select nao religa o cronometro", running, false);
+EQ("nem cria passada nova na Q2 fora do tempo", passes(2), 1);
+EQ("os botoes de resposta estao travados",
+   bt().length === 0 || bt().every(b => b.disabled), true);
+document.querySelector('#typeRow button[data-t="A"]').click();
+EQ("nem escolher tipo depois do tempo", ans[2], undefined);
+EQ("e prova de tipo unico nao auto-atribui fora do tempo",
+   ans[3] === undefined && (openQ(3), ans[3] === undefined), true);
+setRunning(true);
+EQ("setRunning se recusa a religar", running, false);
+
+// mas a conferência continua aberta, e o que sai dali vem carimbado
+openRev();
+EQ("conferencia abre depois de travado", revisando, true);
+const alvo = [...$("revList").children].find(r => r.querySelector(".qq").textContent === "Q1");
+if (alvo) alvo.click(); else openQ(1);
+EQ("na conferencia a folha destrava", bt().some(b => !b.disabled), true);
+bt().find(b => b.textContent === "F?").click();
+const ultimo = events[events.length - 1];
+EQ("a correcao sai como rev", ultimo.rev, true);
+EQ("e carimbada como depois do tempo", ultimo.pos_limite, true);
+sairRev();
+
+const h14 = buildCSV().split(String.fromCharCode(10)).filter(l => l.startsWith("#"));
+const v14 = k => (h14.find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];
+EQ("o bloco declara o tempo de prova", v14("tempo_de_prova"), "02:00");
+EQ("e que ele estourou", v14("tempo_esgotou"), "1");
+EQ("e tempo_sobrou sai vazio, nao zero", v14("tempo_sobrou"), "");
+
+// o travamento sobrevive a fechar e reabrir
+await saveNow(); await drena();
+const guardado = await leSessao(sid);
+EQ("o snapshot guarda o travamento", [guardado.limite, guardado.travado], [120, true]);
+travado = false; limite = 0; document.body.classList.remove("travado");
+retomar(guardado);
+EQ("retomar traz o travamento de volta", [limite, travado], [120, true]);
+EQ("e a classe do corpo tambem", document.body.classList.contains("travado"), true);
+
+// sessão sem limite não trava nunca
+$("newBtn").click();
+$("limIn").value = ""; $("nIn").value = "2"; paintApelidos();
+$("startBtn").click();
+EQ("sem limite, limite fica zero", limite, 0);
+select(1); adv(9999000); tick();
+EQ("e nao trava nunca", travado, false);
+EQ("o rodape volta a mostrar o total", $("rotTotal").textContent, "Sessão");
+setRunning(false);
 
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +

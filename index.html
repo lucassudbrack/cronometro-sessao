@@ -104,6 +104,11 @@
   .revbar{display:none; font-size:10px; line-height:1.45; color:var(--teal); border:1px solid var(--teal);
     border-left-width:3px; border-radius:3px; padding:6px 8px; margin-bottom:10px}
   body.rev .revbar{display:block}
+  body.travado .clock{color:var(--alert)}
+  .travbar{display:none; font-size:10px; line-height:1.45; color:var(--alert);
+    border:1px solid var(--alert); border-left-width:3px; border-radius:3px;
+    padding:6px 8px; margin-bottom:10px}
+  body.travado:not(.rev) .travbar{display:block}
 
   /* conferencia */
   .prow{display:flex; gap:8px; align-items:center; padding:9px 4px; border-bottom:1px solid var(--line);
@@ -261,10 +266,11 @@
   <button id="toggle">Pausar</button>
 </div>
 
-<div class="pane on" id="paneGrid"><div id="grid"></div></div>
+<div class="pane on" id="paneGrid"><div class="travbar" style="margin:0 0 10px">Tempo de prova esgotado: a folha está travada.</div><div id="grid"></div></div>
 
 <div class="pane" id="paneQ">
   <div class="revbar" id="revbar">Conferência — o cronômetro não corre e esta correção fica marcada como tal no log.</div>
+  <div class="travbar">Tempo de prova esgotado: a folha está travada. Vá para a conferência se precisar corrigir um registro.</div>
   <div class="qhead">
     <button id="prevBtn">◀</button>
     <div class="sp"></div>
@@ -312,7 +318,7 @@
 </div>
 
 <div class="foot">
-  <div class="stat"><span class="eyebrow">Sessão</span><span class="v" id="total">00:00</span></div>
+  <div class="stat"><span class="eyebrow" id="rotTotal">Sessão</span><span class="v" id="total">00:00</span></div>
   <div class="stat"><span class="eyebrow">Média</span><span class="v" id="avg">—</span></div>
   <span class="warn" id="nopersist" title="O aparelho recusou gravar. Exporte antes de fechar.">sem disco</span>
   <span class="warn" id="nooffline" title="O cache offline não instalou. Não abra um simulado sem rede.">sem offline</span>
@@ -393,7 +399,15 @@
   <p class="soNova" style="margin:-4px 0 0;font-size:10px;line-height:1.45;color:var(--dim)">
     <b style="color:var(--mute)">na hora</b> deixa o eixo em aberto: você escolhe questão a questão,
     ao abrir cada uma. O tipo da questão é sempre escolhido na hora.</p>
-  <div class="field soNova cronoOnly"><span class="eyebrow">Meta por questão (min) — opcional</span><input id="goalIn" placeholder="4" inputmode="decimal"></div>
+  <div class="row2 cronoOnly">
+    <div class="field soNova" style="flex:1">
+      <span class="eyebrow">Tempo de prova (min)</span>
+      <input id="limIn" placeholder="—" inputmode="decimal"></div>
+    <div class="field soNova" style="flex:1">
+      <span class="eyebrow">Meta por questão (min)</span>
+      <input id="goalIn" placeholder="4" inputmode="decimal"></div>
+  </div>
+  <p class="hint soNova cronoOnly">Ao esgotar o tempo de prova o cronômetro trava e a folha fecha. Vazio = sem limite.</p>
   <button class="primary" id="startBtn" style="padding:13px">Começar</button>
 </div>
 
@@ -409,13 +423,6 @@
       <button id="identEdit">Editar</button>
     </div>
   </div>
-  <div class="field"><span class="eyebrow">Itens da prova</span>
-    <div class="row2">
-      <input id="mItens" inputmode="numeric" autocomplete="off" placeholder="—">
-      <button id="mItensCalc">deste set</button>
-    </div>
-    <p class="hint">Julgáveis que existem na prova, brancos incluídos, anulados fora. Fica vazio se você não souber — vazio é dado, chute não é.</p>
-  </div>
   <div class="field"><span class="eyebrow">Olhar depois</span>
     <p class="hint">Questões cujo desenvolvimento você quer revisar. Toque nos números.</p>
     <div class="ograde" id="olharGrid"></div>
@@ -430,6 +437,21 @@
 
 <datalist id="vMat"></datalist><datalist id="vSub"></datalist>
 <datalist id="vFonte"></datalist><datalist id="vConc"></datalist>
+
+<div class="setup sheet hide" id="fimSheet">
+  <div>
+    <h1>Tempo esgotado</h1>
+    <p id="fimTxt"></p>
+  </div>
+  <div class="endbtns">
+    <button id="fimRev">Conferir</button>
+    <button id="fimGab">Gabarito</button>
+    <button id="fimEnd">Fechamento</button>
+  </div>
+  <button id="fimVer" style="padding:12px">Ver a grade</button>
+  <p class="hint">A folha está travada: o que for corrigido daqui em diante sai
+     marcado no log como feito depois do tempo.</p>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -495,7 +517,7 @@ let apelidos={};
 // de cada questão. É esta ficha que dá nome ao arquivo e à sessão guardada.
 const hojeISO = () => { const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
-const fichaVazia=()=>({data:hojeISO(),concurso:"",mat:"",sub:"",fonte:"",tipo:"prova",itens:""});
+const fichaVazia=()=>({data:hojeISO(),concurso:"",mat:"",sub:"",fonte:"",tipo:"prova"});
 let ficha=fichaVazia(), olhar={};
 // Prova e teste correm no relógio; aprendizado não precisa. Quando não corre,
 // tempo não é registrado e sai vazio — zero seria mentira, vazio é dado ausente.
@@ -507,6 +529,10 @@ const TIPOS={prova:true, teste:true, aprendizado:false};
 let gab={}, gabAberto=null;
 let running=false, segStart=null, sessionAccum=0, sessionStart=null, started=false, curQ=null;
 let exported=false, revisando=false;
+// Tempo de prova. Ao esgotar, o cronômetro para e a folha trava — mas a
+// conferência e o gabarito continuam abertos, porque corrigir um registro não é
+// responder. Tudo que sair depois vai carimbado com pos_limite.
+let limite=0, travado=false;
 
 const now=()=>performance.now();
 function fmt(s){ if(s==null||isNaN(s)) return "—";
@@ -519,6 +545,8 @@ const elapsed=()=> (running&&segStart!==null) ? (now()-segStart)/1000 : 0;
 const visitLive=()=> visit ? visit.sec+elapsed() : 0;
 const qLive=q=> (times[q]||0) + (visit&&visit.q===q ? elapsed() : 0);
 const sessionLive=()=> sessionAccum + (running&&sessionStart!==null ? (now()-sessionStart)/1000 : 0);
+const restante = () => limite ? Math.max(0, limite - sessionLive()) : null;
+const bloqueia = () => travado && !revisando;
 const passes=q=> log.filter(v=>v.q===q).length + (visit&&visit.q===q?1:0);
 const sec1 = x => Math.round(x*10)/10;   // o log guarda décimos; o CSV arredonda
 
@@ -528,6 +556,7 @@ const sec1 = x => Math.round(x*10)/10;   // o log guarda décimos; o CSV arredon
 // feita sob pressão de tempo e uma correção posterior não são o mesmo dado.
 function ev(o){
   events.push(Object.assign({t:iso(Date.now())}, o, revisando?{rev:true}:{},
+    travado?{pos_limite:true}:{},
     // olhar marcado depois de ver o gabarito não é a mesma escolha que antes
     (gabAberto && o.ev==="olhar") ? {pos_gabarito:true} : {}));
   exported=false; saveNow();
@@ -556,7 +585,7 @@ function commit(){ if(segStart===null) return;
   segStart=null; }
 
 function setRunning(on){
-  if(on && !cronometrar) return;
+  if(on && (!cronometrar || travado)) return;
   if(on===running) return;
   if(on){ running=true; segStart=now(); sessionStart=now(); wake(); ev({ev:"resume", q:visit?visit.q:null}); }
   else{ commit(); if(sessionStart!==null){ sessionAccum+=(now()-sessionStart)/1000; sessionStart=null; }
@@ -567,6 +596,28 @@ function setRunning(on){
   $("toggle").classList.toggle("primary", !running);
   paint();
 }
+function travar(){
+  if(travado) return;
+  travado=true;
+  setRunning(false);                       // emite pause antes do carimbo
+  ev({ev:"tempo_esgotado", limite_seg:limite, duracao_seg:Math.round(sessionLive())});
+  document.body.classList.add("travado");
+  sairRev(); closeEnd();
+  $("fimTxt").textContent =
+    "Você marcou "+fmt(limite)+" de prova e o tempo acabou. O cronômetro parou e a folha "+
+    "de respostas está fechada. A conferência e o gabarito continuam abertos.";
+  $("fimSheet").classList.remove("hide");
+  try{ if(navigator.vibrate) navigator.vibrate([200,100,200,100,400]); }catch(e){}
+  paint(); saveNow();
+}
+// Checado no rAF e também no heartbeat de 5 s: com o app em janela flutuante o
+// rAF pode parar, e o limite não pode depender de a tela estar sendo pintada.
+function checaLimite(){ if(limite && !travado && running && sessionLive()>=limite) travar(); }
+$("fimVer").onclick=()=>{ $("fimSheet").classList.add("hide"); showPane("paneGrid"); };
+$("fimRev").onclick=()=>{ $("fimSheet").classList.add("hide"); openRev(); };
+$("fimGab").onclick=()=>{ $("fimSheet").classList.add("hide"); openGab(); };
+$("fimEnd").onclick=()=>{ $("fimSheet").classList.add("hide"); openEnd(); };
+
 let wl=null;
 async function wake(){ try{ if("wakeLock" in navigator && !wl) wl=await navigator.wakeLock.request("screen"); }catch(e){} }
 function unwake(){ try{ if(wl){ wl.release(); wl=null; } }catch(e){} }
@@ -594,8 +645,11 @@ function showPane(id){
 }
 function openQ(q){
   // Se a prova só tem um tipo, não há o que descobrir lendo: já entra escolhido.
+  // Nunca depois do tempo: auto-atribuir criaria uma folha vazia numa questão
+  // que você não alcançou, e esses itens virariam S — "enfrentei sem palpite" —
+  // quando o certo é não existirem.
   const so=["A","ME","B"].filter(k=>usa[k]);
-  if(!ans[q] && so.length===1){ ans[q]=blankAns(so[0]); ev({ev:"tipo",q:q,tipo:so[0],auto:true}); }
+  if(!ans[q] && so.length===1 && !bloqueia()){ ans[q]=blankAns(so[0]); ev({ev:"tipo",q:q,tipo:so[0],auto:true}); }
   curQ=q; renderQ(); showPane("paneQ");
 }
 
@@ -774,6 +828,7 @@ function paintParam(){
   box.appendChild(g);
 }
 function trocaParam(v){
+  if(bloqueia()){ toast("tempo esgotado — a folha está travada"); return; }
   const a=ans[curQ]; if(!a || paramDe(a)===v) return;
   if(a.tipo==="A"){
     const perde=a.itens.slice(v).filter(it=>it.r!==null).length;
@@ -830,7 +885,7 @@ function renderQ(){
         const b=document.createElement("button");
         b.textContent=L+cf;
         b.className = (it.r===L && it.c===cf) ? "sel" : "";
-        b.disabled = it.T;                 // não alcancei por tempo: não há o que marcar
+        b.disabled = it.T || bloqueia();   // não alcancei por tempo: não há o que marcar
         b.onclick=()=>{ it.r=L; it.c=cf; ev({ev:"mark",q:q,item:idx+1,resp:L,conf:cf}); renderQ(); paint(); save(); };
         opts.appendChild(b);
       });
@@ -838,7 +893,7 @@ function renderQ(){
     });
     const bl=document.createElement("button");
     bl.textContent="—"; bl.className = it.r==="-" ? "sel" : "";
-    bl.disabled = it.T;
+    bl.disabled = it.T || bloqueia();
     bl.onclick=()=>{ it.r="-"; it.c=null; ev({ev:"mark",q:q,item:idx+1,resp:"-"}); renderQ(); paint(); save(); };
     opts.appendChild(bl);
     row.appendChild(opts);
@@ -846,7 +901,7 @@ function renderQ(){
     [["B","B"],["T","T"]].forEach(([k,txt])=>{
       const b=document.createElement("button");
       b.textContent=txt; b.className = it[k] ? "sel" : "";
-      b.disabled = (k==="B" && it.T);      // B é sobre uma resposta; sem resposta não existe
+      b.disabled = (k==="B" && it.T) || bloqueia();   // B é sobre uma resposta; sem resposta não existe
       b.onclick=()=>{ marcaFlag(it,k,q,idx+1); renderQ(); paint(); };
       fl.appendChild(b);
     });
@@ -876,20 +931,20 @@ function renderB(area,a){
   const pad=document.createElement("div"); pad.className="numpad";
   for(let d=0;d<=9;d++){
     const b=document.createElement("button"); b.textContent=d;
-    b.disabled = it.T;
+    b.disabled = it.T || bloqueia();
     b.onclick=()=>{ if(a.num.length<a.dig){ a.num+=d; it.r=a.num; ev({ev:"digit",q:q,d:d});
       renderQ(); paint(); save(); } };
     pad.appendChild(b);
   }
   const del=document.createElement("button"); del.textContent="←";
-  del.disabled = it.T;
+  del.disabled = it.T || bloqueia();
   del.onclick=()=>{ if(!a.num.length) return;
     a.num=a.num.slice(0,-1); it.r=a.num||null;
     ev({ev:"digit_del",q:q,num:a.num}); renderQ(); paint(); };
   pad.appendChild(del);
   const bl=document.createElement("button"); bl.textContent="—";
   bl.className = it.r==="-" ? "primary" : "";
-  bl.disabled = it.T;
+  bl.disabled = it.T || bloqueia();
   bl.onclick=()=>{ a.num=""; it.r="-"; it.c=null; ev({ev:"mark",q:q,resp:"-"}); renderQ(); paint(); save(); };
   pad.appendChild(bl);
   area.appendChild(pad);
@@ -902,7 +957,7 @@ function renderB(area,a){
   [["c","certeza"],["?","dúvida"],["x","chute"]].forEach(([cf,nm])=>{
     const b=document.createElement("button"); b.textContent=cf+" "+nm;
     b.className = it.c===cf ? "sel" : "";
-    b.disabled = it.T;
+    b.disabled = it.T || bloqueia();
     b.onclick=()=>{ it.c=cf; ev({ev:"conf",q:q,conf:cf}); renderQ(); save(); };
     opts.appendChild(b);
   });
@@ -911,7 +966,7 @@ function renderB(area,a){
   [["B","B"],["T","T"]].forEach(([k,txt])=>{
     const b=document.createElement("button"); b.textContent=txt;
     b.className = it[k] ? "sel" : "";
-    b.disabled = (k==="B" && it.T);
+    b.disabled = (k==="B" && it.T) || bloqueia();
     b.onclick=()=>{ marcaFlag(it,k,q,null,a); renderQ(); paint(); };
     fl.appendChild(b);
   });
@@ -941,6 +996,7 @@ function paintLog(){
   el.scrollTop=el.scrollHeight;
 }
 function tick(){
+  checaLimite();
   if(!cronometrar){
     $("clock").textContent="sem relógio";
     $("total").textContent="—"; $("avg").textContent="—";
@@ -948,7 +1004,10 @@ function tick(){
   }
   const v=visitLive();
   $("clock").innerHTML = fmt(v).replace(":",'<span class="colon">:</span>')+'<span class="dec">.'+Math.floor((v%1)*10)+'</span>';
-  $("total").textContent = fmt(sessionLive());
+  const rst=restante();
+  $("total").textContent = rst===null ? fmt(sessionLive()) : fmt(rst);
+  $("rotTotal").textContent = rst===null ? "Sessão" : "Restam";
+  $("total").style.color = (rst!==null && rst<=300) ? "var(--alert)" : "";
   if(visit){
     const c=document.querySelector('[data-t="'+visit.q+'"]'); if(c) c.textContent=fmt(qLive(visit.q));
     const l=document.querySelector('[data-livevisit]'); if(l) l.textContent=fmt(v);
@@ -973,7 +1032,7 @@ function snapshot(){
       vis.sec+=d; t[visit.q]=(t[visit.q]||0)+d;
     }
   }
-  return {fmt:4,nome:nomeBase(),N,goal,cfgA,cfgME,cfgB,usa,pesos,cronometrar,times:t,log,visit:vis,ans,pags,apelidos,ficha,olhar,gab,gabAberto,events,
+  return {fmt:5,nome:nomeBase(),N,goal,limite,travado,cfgA,cfgME,cfgB,usa,pesos,cronometrar,times:t,log,visit:vis,ans,pags,apelidos,ficha,olhar,gab,gabAberto,events,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -1012,7 +1071,8 @@ async function leSessao(id){ if(!store) return null;
 // do boot porque é o caminho mais caro de errar do app inteiro: se ele estiver
 // errado, o prejuízo é uma sessão de estudo, e só se descobre já perdida.
 function retomar(prev){
-  N=prev.N; goal=prev.goal||0;
+  N=prev.N; goal=prev.goal||0; limite=prev.limite||0; travado=!!prev.travado;
+  document.body.classList.toggle("travado", travado);
   cronometrar = prev.cronometrar!==undefined ? prev.cronometrar : true;
   // fmt 1 guardava nItens/nAlt globais e questões sem alt/dig próprios.
   cfgA  = prev.cfgA  !== undefined ? prev.cfgA  : (prev.nItens || 5);
@@ -1047,7 +1107,7 @@ function retomar(prev){
 
 // Enquanto o cronômetro corre, encosta o disco no relógio a cada 5 s. Sem isso,
 // pensar cinco minutos numa questão sem tocar em nada deixaria 5 min de janela.
-setInterval(()=>{ if(running) saveNow(); }, 5000);
+setInterval(()=>{ checaLimite(); if(running) saveNow(); }, 5000);
 // Última chance antes de a aba morrer de morte anunciada.
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) saveNow(); });
 window.addEventListener("pagehide",saveNow);
@@ -1093,19 +1153,11 @@ function tally(){
   }
   return c;
 }
-// Julgáveis da prova: os que existem, brancos incluídos, anulados fora.
-// Todos os itens declarados, anulados incluídos: é o total de onde I é derivado.
+// Todos os itens declarados, anulados incluídos: é o total de onde I é derivado
+// por subtração. Substituiu itensDoSet, que existia só para um campo que saiu.
 function itensNoSet(){
   let n=0;
   for(let q=1;q<=N;q++){ const a=ans[q]; if(!a || paramDe(a)==null) continue; n+=a.itens.length; }
-  return n;
-}
-function itensDoSet(){
-  let n=0;
-  for(let q=1;q<=N;q++){
-    const a=ans[q]; if(!a || paramDe(a)==null) continue;
-    a.itens.forEach((_,i)=>{ if(!anulado(q,i)) n++; });
-  }
   return n;
 }
 function setGab(q,i,v){
@@ -1393,8 +1445,6 @@ function openEnd(){
   setRunning(false);                       // fechamento não é tempo de prova
   sairRev();
   pintaNome();
-  $("mItens").value=ficha.itens||"";
-  $("mItensCalc").textContent="deste set ("+itensDoSet()+")";
   const f=contaFaltas();
   $("endRev").textContent = f ? "Conferir ("+f+")" : "Conferir";
   $("endRev").classList.toggle("alerta", f>0);
@@ -1411,11 +1461,6 @@ FICHA.forEach(([k,el])=>{
 });
 $("mData").addEventListener("change", e=>{ ficha.data=e.target.value||hojeISO();
   e.target.value=ficha.data; pintaNome(); if(started) ev({ev:"ficha",campo:"data",valor:ficha.data}); });
-$("mItens").addEventListener("input", e=>{ ficha.itens=e.target.value.replace(/\D/g,""); save(); });
-$("mItens").addEventListener("change", e=>{ e.target.value=ficha.itens;
-  ev({ev:"ficha",campo:"itens",valor:ficha.itens}); });
-$("mItensCalc").onclick=()=>{ ficha.itens=String(itensDoSet()); $("mItens").value=ficha.itens;
-  ev({ev:"ficha",campo:"itens",valor:ficha.itens,de:"contagem do set"}); };
 $("endBack").onclick=closeEnd;
 // Editar a identificação reabre o setup sem tocar na sessão: some o que só faz
 // sentido ao criar (nº de questões, eixos, meta) e Começar vira Salvar.
@@ -1616,7 +1661,6 @@ function buildCSV(){
   L.push("# fonte,"+csvv(ficha.fonte));
   L.push("# tipo_sessao,"+csvv(ficha.tipo));
   L.push("# cronometrada,"+(cronometrar?1:0));
-  L.push("# itens_da_prova,"+csvv(ficha.itens));
   const X=indices();
   L.push("# questoes_no_set,"+N);
   // itens_no_set é o total declarado; I sai dele tirando anulado e sem gabarito.
@@ -1629,6 +1673,9 @@ function buildCSV(){
   L.push("# me_alternativas,"+eixo(cfgME));
   L.push("# conta_digitos,"+eixo(cfgB));
   L.push("# duracao_total,"+(cronometrar?fmt(sessionLive()):""));
+  L.push("# tempo_de_prova,"+(limite?fmt(limite):""));
+  L.push("# tempo_esgotou,"+(limite?(travado?1:0):""));
+  L.push("# tempo_sobrou,"+(limite&&!travado?fmt(restante()):""));
   L.push("# olhar,"+csvv(olharList().join(" ")));
   L.push("# col.param,"+csvv("tipo A: nº de itens · ME: nº de alternativas · B: nº de dígitos"));
   L.push("# col.gabarito,"+csvv("mesmo alfabeto de itens · X = anulada · vazio = sem gabarito"));
@@ -1840,6 +1887,7 @@ $("backBtn").onclick=()=>{ if(revisando){ paintRev(); showPane("paneRev"); } els
 $("prevBtn").onclick=()=>{ if(curQ>1) irQ(curQ-1); };
 $("nextBtn").onclick=()=>{ if(curQ<N) irQ(curQ+1); };
 document.querySelectorAll("#typeRow button").forEach(b=>b.onclick=()=>{
+  if(bloqueia()){ toast("tempo esgotado — a folha está travada"); return; }
   const t=b.dataset.t;
   if(ans[curQ] && ans[curQ].tipo!==t && !confirm("Trocar o tipo apaga as marcações desta questão. Continuar?")) return;
   ans[curQ]=blankAns(t); ev({ev:"tipo",q:curQ,tipo:t}); renderQ(); paint(); save();
@@ -1958,18 +2006,20 @@ $("startBtn").onclick=()=>{
   if(!n||n<1||n>300){ $("nIn").focus(); return; }
   sid=novoId();          // sessão nova é chave nova: nada é sobrescrito
   const g=parseFloat(String($("goalIn").value).replace(",","."));
-  N=n; goal = g>0 ? g*60 : 0;
+  const lm=parseFloat(String($("limIn").value).replace(",","."));
+  N=n; goal = g>0 ? g*60 : 0; limite = lm>0 ? lm*60 : 0; travado=false;
+  document.body.classList.remove("travado"); $("fimSheet").classList.add("hide");
   times={}; log=[]; visit=null; ans={}; pags={}; events=[]; sessionAccum=0; sessionStart=null; running=false;
   // ficha NÃO é zerada: os campos de identificação acabaram de ser preenchidos
   // aqui em cima. Só o que é da sessão em si volta ao zero.
-  ficha.itens=""; olhar={}; gab={}; gabAberto=null; curQ=null; invalidaPags();
+  olhar={}; gab={}; gabAberto=null; curQ=null; invalidaPags();
   document.body.classList.remove("running","paused"); $("toggle").textContent="Pausar";
   const eixo = v => v===0 ? "na hora" : v;
   started=true; ev({ev:"start",questoes:N,sessao:nomeBase(),cronometrada:cronometrar,
     tipo_sessao:ficha.tipo, data:ficha.data, concurso:ficha.concurso,
     materia:ficha.mat, subtopico:ficha.sub, fonte:ficha.fonte,
     ce_itens:eixo(cfgA), me_alternativas:eixo(cfgME), conta_digitos:eixo(cfgB),
-    modelo:ficha.template||"livre", tipos_na_prova:["A","ME","B"].filter(k=>usa[k]),
+    tempo_de_prova_seg:limite||null, modelo:ficha.template||"livre", tipos_na_prova:["A","ME","B"].filter(k=>usa[k]),
     pesos:JSON.parse(JSON.stringify(pesos))});
   pintaTipo(); pintaNome();
   buildGrid(); paint(); saveNow(); showPane("paneGrid");

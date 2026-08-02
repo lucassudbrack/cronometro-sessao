@@ -44,6 +44,19 @@ O dropdown de modelo preenche tudo de uma vez:
 ⚠ O nº de itens do BACEN está em 1 por questão, padrão Cebraspe — confira no
 edital antes de valer.
 
+## Tempo de prova
+
+No setup, opcional. Ao esgotar, o cronômetro para e a folha de respostas trava:
+não dá para marcar, escolher tipo nem religar o relógio. A conferência e o
+gabarito continuam abertos — corrigir um registro não é responder — e tudo que
+sair de lá vai carimbado com `pos_limite` no log.
+
+O rodapé passa a contar o que resta em vez do total, em vermelho nos últimos
+cinco minutos. O limite é checado no `requestAnimationFrame` **e** no heartbeat
+de 5 s, porque em janela flutuante o rAF pode parar e o limite não pode
+depender de a tela estar sendo pintada. O travamento entra no snapshot: fechar
+e reabrir não destrava.
+
 ## Usar
 
 Abra a página, instale como app (o navegador oferece "instalar" ou "adicionar à
