@@ -141,6 +141,9 @@
   .flags{display:flex; gap:3px; margin-left:6px}
   .flags button{flex:0 0 34px; padding:10px 0; font-family:var(--mono); font-size:11px; text-transform:none}
   .flags button.sel{background:var(--alert); border-color:var(--alert)}
+  .opts button:disabled, .flags button:disabled, .numpad button:disabled{
+    opacity:.28; cursor:default}
+  .item.semtempo{border-color:var(--alert); border-left-width:3px}
   .row{display:flex; align-items:stretch}
 
   .numpad{display:grid; grid-template-columns:repeat(5,1fr); gap:5px; margin-top:6px}
@@ -815,9 +818,10 @@ function renderQ(){
   const letters = a.tipo==="ME" ? LETRAS.slice(0,a.alt).split("") : ["V","F"];
   area.innerHTML="";
   a.itens.forEach((it,idx)=>{
-    const box=document.createElement("div"); box.className="item";
+    const box=document.createElement("div"); box.className="item"+(it.T?" semtempo":"");
     const lab=document.createElement("div"); lab.className="itemlab";
-    lab.textContent = a.tipo==="ME" ? "alternativa" : ("item "+(idx+1));
+    lab.textContent = (a.tipo==="ME" ? "alternativa" : ("item "+(idx+1)))+
+      (it.T ? " · sem tempo, entra como branco" : "");
     box.appendChild(lab);
     const row=document.createElement("div"); row.className="row";
     const opts=document.createElement("div"); opts.className="opts";
@@ -826,6 +830,7 @@ function renderQ(){
         const b=document.createElement("button");
         b.textContent=L+cf;
         b.className = (it.r===L && it.c===cf) ? "sel" : "";
+        b.disabled = it.T;                 // não alcancei por tempo: não há o que marcar
         b.onclick=()=>{ it.r=L; it.c=cf; ev({ev:"mark",q:q,item:idx+1,resp:L,conf:cf}); renderQ(); paint(); save(); };
         opts.appendChild(b);
       });
@@ -833,6 +838,7 @@ function renderQ(){
     });
     const bl=document.createElement("button");
     bl.textContent="—"; bl.className = it.r==="-" ? "sel" : "";
+    bl.disabled = it.T;
     bl.onclick=()=>{ it.r="-"; it.c=null; ev({ev:"mark",q:q,item:idx+1,resp:"-"}); renderQ(); paint(); save(); };
     opts.appendChild(bl);
     row.appendChild(opts);
@@ -840,13 +846,26 @@ function renderQ(){
     [["B","B"],["T","T"]].forEach(([k,txt])=>{
       const b=document.createElement("button");
       b.textContent=txt; b.className = it[k] ? "sel" : "";
-      b.onclick=()=>{ it[k]=!it[k]; ev({ev:"flag",q:q,item:idx+1,flag:k,on:it[k]}); renderQ(); paint(); save(); };
+      b.disabled = (k==="B" && it.T);      // B é sobre uma resposta; sem resposta não existe
+      b.onclick=()=>{ marcaFlag(it,k,q,idx+1); renderQ(); paint(); };
       fl.appendChild(b);
     });
     row.appendChild(fl);
     box.appendChild(row);
     area.appendChild(box);
   });
+}
+// T significa "não alcancei este item". Não é um jeito de responder: zera a
+// marcação, vira branco e trava os botões de resposta. Sem isso T e resposta
+// coexistiriam, e os seis estados deixariam de ser mutuamente exclusivos.
+function marcaFlag(it,k,q,item,aB){
+  it[k]=!it[k];
+  if(k==="T" && it.T){
+    it.r="-"; it.c=null; it.B=false;
+    if(aB) aB.num="";
+  }
+  ev(Object.assign({ev:"flag",q:q,flag:k,on:it[k]}, item?{item:item}:{},
+                   (k==="T"&&it.T)?{zerou:true}:{}));
 }
 function renderB(area,a){
   const q=curQ, it=a.itens[0];
@@ -857,17 +876,20 @@ function renderB(area,a){
   const pad=document.createElement("div"); pad.className="numpad";
   for(let d=0;d<=9;d++){
     const b=document.createElement("button"); b.textContent=d;
+    b.disabled = it.T;
     b.onclick=()=>{ if(a.num.length<a.dig){ a.num+=d; it.r=a.num; ev({ev:"digit",q:q,d:d});
       renderQ(); paint(); save(); } };
     pad.appendChild(b);
   }
   const del=document.createElement("button"); del.textContent="←";
+  del.disabled = it.T;
   del.onclick=()=>{ if(!a.num.length) return;
     a.num=a.num.slice(0,-1); it.r=a.num||null;
     ev({ev:"digit_del",q:q,num:a.num}); renderQ(); paint(); };
   pad.appendChild(del);
   const bl=document.createElement("button"); bl.textContent="—";
   bl.className = it.r==="-" ? "primary" : "";
+  bl.disabled = it.T;
   bl.onclick=()=>{ a.num=""; it.r="-"; it.c=null; ev({ev:"mark",q:q,resp:"-"}); renderQ(); paint(); save(); };
   pad.appendChild(bl);
   area.appendChild(pad);
@@ -880,6 +902,7 @@ function renderB(area,a){
   [["c","certeza"],["?","dúvida"],["x","chute"]].forEach(([cf,nm])=>{
     const b=document.createElement("button"); b.textContent=cf+" "+nm;
     b.className = it.c===cf ? "sel" : "";
+    b.disabled = it.T;
     b.onclick=()=>{ it.c=cf; ev({ev:"conf",q:q,conf:cf}); renderQ(); save(); };
     opts.appendChild(b);
   });
@@ -888,7 +911,8 @@ function renderB(area,a){
   [["B","B"],["T","T"]].forEach(([k,txt])=>{
     const b=document.createElement("button"); b.textContent=txt;
     b.className = it[k] ? "sel" : "";
-    b.onclick=()=>{ it[k]=!it[k]; ev({ev:"flag",q:q,flag:k,on:it[k]}); renderQ(); save(); };
+    b.disabled = (k==="B" && it.T);
+    b.onclick=()=>{ marcaFlag(it,k,q,null,a); renderQ(); paint(); };
     fl.appendChild(b);
   });
   row.appendChild(fl);
@@ -1092,14 +1116,18 @@ function paintGab(){
   const el=$("gabList"); el.innerHTML="";
 
   const n=(v,s,p)=>"<b>"+v+"</b> "+(v===1?s:p);
+  const X=indices();
   const t=document.createElement("div"); t.className="gtally";
   t.innerHTML=n(c.ok,"confere","conferem")+" · "+n(c.erro,"diverge","divergem")+" · "+
     n(c.branco,"em branco","em branco")+"<br>"+
     n(c.anulado,"anulado","anulados")+" (fora da prova) · "+
     n(c.sem,"ainda sem gabarito","ainda sem gabarito")+"<br>"+
-    "<b>"+pontos(false)+"</b> de <b>"+pontosMax()+"</b> pontos"+
-    (pontos(true)!==pontos(false) ? " · <b>"+pontos(true)+"</b> respeitando os B" : "")+"<br>"+
-    "<span style='color:var(--dim)'>pontos pelos pesos declarados no setup; branco vale 0 e anulado fica fora</span>";
+    "<b>"+X.pontos+"</b> de <b>"+X.pontos_em_jogo+"</b> pontos em jogo · real <b>"+pct(X.real)+"</b><br>"+
+    "enfrentado <b>"+pct(X.acerto_do_enfrentado)+"</b> · por tempo <b>"+pct(X.branco_por_tempo)+
+    "</b> · por conceito <b>"+pct(X.branco_por_conceito)+"</b><br>"+
+    "C_m "+X.C_m+" · E_m "+X.E_m+" · C_B "+X.C_B+" · E_B "+X.E_B+" · S "+X.S+" · T "+X.T+
+    " = <b>"+X.I+"</b>"+(X.identidade_fecha?"":" <span style='color:var(--alert)'>NÃO FECHA</span>")+"<br>"+
+    "<span style='color:var(--dim)'>pelos pesos declarados no setup; item com B rende 0 e tira 0, mas continua no denominador</span>";
   el.appendChild(t);
 
   let algum=false;
@@ -1403,36 +1431,99 @@ const RES={ok:"acerto", erro:"erro", branco:"branco", anulado:"anulado", sem:"se
 // Pontuação. Branco vale 0; anulado e item sem gabarito ficam fora da conta.
 // O app não arbitra regra nenhuma: aplica exatamente os pesos declarados no setup.
 const num1 = x => Math.round(x*100)/100;
-function pontosDoItem(q,i,respeitaB){
+// Pontos de um item, na regra oficial: B rende 0 e tira 0.
+function pontosDoItem(q,i){
   const a=ans[q]; if(!a) return 0;
-  const res=confere(q,i);
-  if(res==="anulado" || res==="sem" || res==="branco") return 0;
-  if(respeitaB && a.itens[i].B) return 0;      // teria deixado em branco na prova real
-  return pesos[a.tipo][res==="ok"?"acerto":"erro"];
+  const e=estadoDoItem(q,i);
+  if(e==="C_m") return pesos[a.tipo].acerto;
+  if(e==="E_m") return pesos[a.tipo].erro;
+  return 0;                                    // C_B, E_B, S, T, anulado, sem gabarito
 }
-function pontos(respeitaB){
-  let s=0;
+/* Índices ----------------------------------------------------------------
+   Todo item válido termina em exatamente um de seis estados, e eles somam I.
+   A identidade é auto-auditável: se não fechar, há item sem destino.
+
+     C_m  marquei e acertei
+     E_m  marquei e errei
+     C_B  declarei que deixaria em branco, e o palpite acertou
+     E_B  declarei que deixaria em branco, e o palpite errou
+     S    enfrentei e não tive nem palpite
+     T    não alcancei por tempo
+
+     C_m + E_m + C_B + E_B + S + T = I     (anulado e sem gabarito ficam fora)
+
+   Item marcado B rende 0 e tira 0, mas continua no denominador: ele estava em
+   jogo e você não o levou. É isso que faz o índice ser normalizado contra a
+   prova, e não contra o que você resolveu enfrentar.
+
+   A pontuação real é a versão ponderada de (C_m − E_m)/I: com peso +1 no
+   acerto e −1 no erro ela devolve exatamente essa fração, e com os pesos da
+   ANPEC (conta vale +5 e erra 0) ela continua dizendo a verdade, o que a
+   fração crua não faria.                                                    */
+function estadoDoItem(q,i){
+  const it=ans[q].itens[i], r=confere(q,i);
+  if(r==="anulado") return "anulado";
+  if(r==="sem")     return "sem_gabarito";
+  if(it.T)          return "T";
+  if(r==="branco")  return "S";
+  if(it.B)          return r==="ok" ? "C_B" : "E_B";
+  return r==="ok" ? "C_m" : "E_m";
+}
+function indices(){
+  const n={C_m:0,E_m:0,C_B:0,E_B:0,S:0,T:0,anulado:0,sem_gabarito:0};
+  let pontosJogo=0, ptsLiq=0, ptsComB=0, ptsAcertoM=0, evitado=0, abrido=0;
+  const conf={c:{ok:0,tot:0}, "?":{ok:0,tot:0}, x:{ok:0,tot:0}};
   for(let q=1;q<=N;q++){
     const a=ans[q]; if(!a || paramDe(a)==null) continue;
-    a.itens.forEach((_,i)=>{ s+=pontosDoItem(q,i,respeitaB); });
+    const pa=pesos[a.tipo].acerto, pe=pesos[a.tipo].erro;
+    a.itens.forEach((it,i)=>{
+      const e=estadoDoItem(q,i);
+      n[e]++;
+      if(e==="anulado"||e==="sem_gabarito") return;
+      pontosJogo+=pa;
+      if(e==="C_m"){ ptsLiq+=pa; ptsComB+=pa; ptsAcertoM+=pa; }
+      else if(e==="E_m"){ ptsLiq+=pe; ptsComB+=pe; }
+      else if(e==="C_B"){ abrido+=pa; ptsComB+=pa; }   // desisti de um acerto
+      else if(e==="E_B"){ evitado+=-pe; ptsComB+=pe; } // evitei um erro
+      if((e==="C_m"||e==="E_m"||e==="C_B"||e==="E_B") && conf[it.c]){
+        conf[it.c].tot++; if(e==="C_m"||e==="C_B") conf[it.c].ok++;
+      }
+    });
   }
-  return num1(s);
+  const I=n.C_m+n.E_m+n.C_B+n.E_B+n.S+n.T;
+  const opinou=n.C_m+n.E_m+n.C_B+n.E_B;
+  const r=(x,y)=> y>0 ? Math.round(x/y*10000)/10000 : null;
+  const rr=(x,y)=> y>0 ? Math.round(x/y*10000)/10000 : null;   // pode dar negativo
+  return {
+    C_m:n.C_m, E_m:n.E_m, C_B:n.C_B, E_B:n.E_B, S:n.S, T:n.T,
+    I, anulados:n.anulado, sem_gabarito:n.sem_gabarito, opinou,
+    identidade_fecha: (n.C_m+n.E_m+n.C_B+n.E_B+n.S+n.T)===I,
+    pontos_em_jogo:num1(pontosJogo), pontos:num1(ptsLiq),
+    pontos_ignorando_B:num1(ptsComB),
+    real_ignorando_B: rr(ptsComB, pontosJogo),
+    real: rr(ptsLiq, pontosJogo),
+    acerto_do_enfrentado: r(n.C_m+n.C_B, opinou),
+    branco_por_tempo: r(n.T, I),
+    branco_por_conceito: r(n.S, I),
+    branco_por_disciplina: r(n.C_B+n.E_B, I),
+    valor_do_branco: rr(n.E_B-n.C_B, I),
+    valor_do_branco_pontos: rr(evitado-abrido, pontosJogo),
+    acerto_certeza: r(conf.c.ok, conf.c.tot),
+    acerto_duvida:  r(conf["?"].ok, conf["?"].tot),
+    acerto_chute:   r(conf.x.ok, conf.x.tot),
+    acerto_B_palpite: r(n.C_B, n.C_B+n.E_B),
+    bruto_ponderado: r(ptsAcertoM, pontosJogo)
+  };
 }
+
+const pct = v => v===null||v===undefined ? "—" : (v*100).toFixed(1).replace(".",",")+"%";
 function pontosQ(q){
   const a=ans[q]; if(!a || paramDe(a)==null) return null;
   let s=0, tem=false;
-  a.itens.forEach((_,i)=>{ if(confere(q,i)!=="sem"){ tem=true; s+=pontosDoItem(q,i,false); } });
+  a.itens.forEach((_,i)=>{ if(confere(q,i)!=="sem"){ tem=true; s+=pontosDoItem(q,i); } });
   return tem ? num1(s) : null;
 }
-function pontosMax(){        // todo item com gabarito e não anulado, acertado
-  let s=0;
-  for(let q=1;q<=N;q++){
-    const a=ans[q]; if(!a || paramDe(a)==null) continue;
-    a.itens.forEach((_,i)=>{ const r=confere(q,i);
-      if(r!=="anulado" && r!=="sem") s+=pesos[a.tipo].acerto; });
-  }
-  return num1(s);
-}
+
 function estatTidy(){
   const m=new Map();
   for(let q=1;q<=N;q++){
@@ -1440,14 +1531,14 @@ function estatTidy(){
     a.itens.forEach((it,i)=>{
       // item em branco não tem confiança para declarar — não é chute, é ausência
       const conf = (it.r===null || it.r==="-") ? "-" : (it.c||"-");
-      const k=[a.tipo, conf, it.T?1:0, it.B?1:0, RES[confere(q,i)]].join("");
+      const k=[a.tipo, conf, it.T?1:0, it.B?1:0, RES[confere(q,i)], estadoDoItem(q,i)].join("");
       m.set(k,(m.get(k)||0)+1);
     });
   }
   return [...m.entries()].map(([k,n])=>{
     const p=k.split("");
     return {tipo:p[0], confianca:p[1], sem_tempo:+p[2], deixaria_branco:+p[3],
-            resultado:p[4], itens:n};
+            resultado:p[4], estado:p[5], itens:n};
   }).sort((a,b)=> a.tipo.localeCompare(b.tipo) || a.resultado.localeCompare(b.resultado)
                || a.confianca.localeCompare(b.confianca)
                || a.sem_tempo-b.sem_tempo || a.deixaria_branco-b.deixaria_branco);
@@ -1466,12 +1557,13 @@ function buildEstat(){
   L.push("# deixaria_branco,"+csvv("1 = item marcado com B, deixaria em branco na prova real"));
   L.push("# resultado,"+csvv("acerto | erro | branco | anulado | sem_gabarito"));
   L.push("# pontos,"+csvv("itens × peso do resultado; branco, anulado e sem gabarito valem 0"));
-  L.push("tipo,confianca,sem_tempo,deixaria_branco,resultado,itens,pontos");
+  L.push("# estado,"+csvv("C_m E_m C_B E_B S T · os seis estados que somam I"));
+  L.push("tipo,confianca,sem_tempo,deixaria_branco,resultado,estado,itens,pontos");
   E.forEach(r=>{
     const p = r.resultado==="acerto" ? pesos[r.tipo].acerto
             : r.resultado==="erro"   ? pesos[r.tipo].erro : 0;
-    L.push([r.tipo,r.confianca,r.sem_tempo,r.deixaria_branco,r.resultado,r.itens,
-            num1(r.itens*p)].join(","));
+    L.push([r.tipo,r.confianca,r.sem_tempo,r.deixaria_branco,r.resultado,r.estado,r.itens,
+            num1(r.itens*(r.estado==="C_m"||r.estado==="E_m"?p:0))].join(","));
   });
   return L.join("\n");
 }
@@ -1520,7 +1612,6 @@ function buildCSV(){
   L.push("# itens_divergem,"+tl.erro);
   L.push("# itens_em_branco,"+tl.branco);
   L.push("# itens_anulados,"+tl.anulado);
-  L.push("# itens_sem_gabarito,"+tl.sem);
   const E=estatTidy(), sm=f=>somaEst(E,f);
   const acerto = r=>r.resultado==="acerto", erro = r=>r.resultado==="erro";
   [["c","certeza"],["?","duvida"],["x","chute"]].forEach(([k,nome])=>{
@@ -1536,9 +1627,34 @@ function buildCSV(){
   L.push("# sem_tempo_acertos,"+sm(r=>r.sem_tempo===1&&acerto(r)));
   L.push("# sem_tempo_erros,"+sm(r=>r.sem_tempo===1&&erro(r)));
   L.push("# sem_tempo_brancos,"+sm(r=>r.sem_tempo===1&&r.resultado==="branco"));
-  L.push("# pontos,"+pontos(false));
-  L.push("# pontos_maximo,"+pontosMax());
-  L.push("# pontos_se_respeitasse_B,"+pontos(true));
+  const X=indices();
+  L.push("# glossario,"+csvv("real = líquido normalizado contra a prova · item com B rende 0 e tira 0 mas fica no denominador · S = enfrentei sem palpite · T = não alcancei por tempo"));
+  L.push("# identidade,"+csvv("C_m+E_m+C_B+E_B+S+T = I"));
+  ["C_m","E_m","C_B","E_B","S","T","I"].forEach(k=>L.push("# "+k+","+X[k]));
+  L.push("# identidade_fecha,"+(X.identidade_fecha?1:0));
+  L.push("# itens_anulados_fora,"+X.anulados);
+  L.push("# itens_sem_gabarito,"+X.sem_gabarito);
+  L.push("# pontos,"+X.pontos);
+  L.push("# pontos_em_jogo,"+X.pontos_em_jogo);
+  L.push("# pontos_ignorando_B,"+X.pontos_ignorando_B);
+  [["real","projeção de nota, tendência"],
+   ["acerto_do_enfrentado","onde meu modelo falha"],
+   ["branco_por_tempo","pacing"],
+   ["branco_por_conceito","cobertura"],
+   ["branco_por_disciplina","política de branco"],
+   ["valor_do_branco","a disciplina de branco me paga"],
+   ["valor_do_branco_pontos","o mesmo, em pontos — com erro valendo 0 a versão em contagem engana"],
+   ["acerto_certeza","política de chute"],
+   ["acerto_duvida","política de chute"],
+   ["acerto_chute","política de chute"],
+   ["acerto_B_palpite","política de chute"],
+   ["bruto_ponderado","acerto sem a punição do erro"],
+   ["real_ignorando_B","referência: se os B contassem"]]
+   .forEach(([k])=>L.push("# "+k+","+(X[k]===null?"":X[k])));
+  L.push("# min_por_questao,"+(cronometrar&&X.I ? num1(sessionLive()/60/Math.max(1,Object.keys(times).length)) : ""));
+  const trunc=log.filter(v=>v.trunc).length;
+  L.push("# passadas_truncadas,"+trunc);
+  L.push("# pct_passadas_truncadas,"+(log.length?Math.round(trunc/log.length*10000)/10000:0));
   ["A","ME","B"].forEach(tp=>{ if(!usa[tp]) return;
     L.push("# peso_"+tp+"_acerto,"+pesos[tp].acerto);
     L.push("# peso_"+tp+"_erro,"+pesos[tp].erro); });
@@ -1581,7 +1697,7 @@ function buildJSONL(){
     tipo_sessao:ficha.tipo||null, cronometrada:cronometrar,
     modelo:ficha.template||"livre", tipos_na_prova:["A","ME","B"].filter(k=>usa[k]),
     pesos:JSON.parse(JSON.stringify(pesos)),
-    pontos:pontos(false), pontos_maximo:pontosMax(), pontos_se_respeitasse_B:pontos(true),
+    indices:indices(),
     itens_da_prova:ficha.itens?+ficha.itens:null, itens_julgaveis_no_set:itensDoSet(),
     olhar:olharList(), pags:Object.assign({},pags), apelidos:Object.assign({},apelidos),
     pags_efetivas:pagsEfetivas(),

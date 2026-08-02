@@ -429,7 +429,7 @@ EQ("gabarito de tipo A na coluna, com o anulado",
 EQ("gabarito de ME", r6[1].split(",").slice(-2)[0], '"B"');
 EQ("gabarito de conta e o numero", r6[2].split(",").slice(-2)[0], '"42"');
 EQ("bloco traz a contagem",
-   csv6.filter(l => /^# itens_(conferem|divergem|anulados)/.test(l)),
+   csv6.filter(l => /^# itens_(conferem|divergem|anulados),/.test(l)),
    ["# itens_conferem,2", "# itens_divergem,1", "# itens_anulados,1"]);
 EQ("bloco registra quando o gabarito foi visto",
    /^# gabarito_visto_em,20/.test(csv6.find(l => l.startsWith("# gabarito_visto_em"))), true);
@@ -671,7 +671,7 @@ EQ("total de itens bate com a folha",
 const est = buildEstat().split("\n");
 EQ("o arquivo de estatisticas tem cabecalho proprio",
    est.find(l => l.startsWith("tipo,")),
-   "tipo,confianca,sem_tempo,deixaria_branco,resultado,itens,pontos");
+   "tipo,confianca,sem_tempo,deixaria_branco,resultado,estado,itens,pontos");
 EQ("e so linhas de comentario antes dele",
    est.slice(0, est.indexOf(est.find(l => l.startsWith("tipo,")))).every(l => l.startsWith("#")), true);
 EQ("uma linha por combinacao ocorrida",
@@ -754,19 +754,22 @@ gab[1] = { itens: ["V"], num: "" };   // acerto  -> +1
 gab[2] = { itens: ["V"], num: "" };   // erro    -> -0,5
 gab[3] = { itens: ["F"], num: "" };   // erro    -> -0,5
 gab[4] = { itens: ["V"], num: "" };   // branco  ->  0
-EQ("pontos pelos pesos declarados", pontos(false), 0);
-EQ("maximo possivel", pontosMax(), 4);
+EQ("pontos pelos pesos declarados", indices().pontos, 0);
+EQ("pontos em jogo", indices().pontos_em_jogo, 4);
 EQ("pontos por questao", [1, 2, 3, 4].map(pontosQ), [1, -0.5, -0.5, 0]);
 
 // o mesmo set com os pesos da ANPEC dá outro número, e é só o peso que muda
 pesos.A = { acerto: 1, erro: -1 };
-EQ("trocar o peso muda so a conta", [pontos(false), pontosMax()], [-1, 4]);
+EQ("trocar o peso muda so a conta",
+   [indices().pontos, indices().pontos_em_jogo], [-1, 4]);
 pesos.A = { acerto: 1, erro: -0.5 };
 
 // flag B: quanto valeria se eu tivesse deixado em branco o que marquei como B
 ans[3].itens[0].B = true;
-EQ("respeitando os B, o erro da Q3 sai da conta", pontos(true), 0.5);
-EQ("e sem respeitar continua valendo", pontos(false), 0);
+EQ("o master respeita o B: o erro da Q3 sai da conta", indices().pontos, 0.5);
+EQ("mas o item continua no denominador", indices().pontos_em_jogo, 4);
+EQ("e a referencia ignorando B mostra o que teria sido",
+   indices().pontos_ignorando_B, 0);
 
 const h11 = buildCSV().split("\n").filter(l => l.startsWith("#"));
 const v11 = k => (h11.find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];
@@ -776,15 +779,124 @@ EQ("so os tipos em uso aparecem no bloco",
    h11.some(l => l.startsWith("# peso_B_")), false);
 EQ("o bloco declara os tipos da prova e o modelo",
    [v11("tipos_na_prova"), v11("modelo")], ["A", "bacen"]);
-EQ("e os pontos", [v11("pontos"), v11("pontos_maximo"), v11("pontos_se_respeitasse_B")],
-   ["0", "4", "0.5"]);
+EQ("e os pontos", [v11("pontos"), v11("pontos_em_jogo"), v11("pontos_ignorando_B")],
+   ["0.5", "4", "0"]);
 const est11 = buildEstat().split("\n");
 EQ("o arquivo de estatisticas ganhou a coluna de pontos",
    est11.find(l => l.startsWith("tipo,")),
-   "tipo,confianca,sem_tempo,deixaria_branco,resultado,itens,pontos");
+   "tipo,confianca,sem_tempo,deixaria_branco,resultado,estado,itens,pontos");
 EQ("a soma da coluna bate com o total",
    est11.slice(est11.indexOf(est11.find(l => l.startsWith("tipo,"))) + 1)
-        .reduce((s, l) => s + parseFloat(l.split(",").pop()), 0), 0);
+        .reduce((s, l) => s + parseFloat(l.split(",").pop()), 0), 0.5);
+
+/* ---- cenário 12: os seis estados, a identidade e os índices ---- */
+Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
+idx = []; sid = null;
+$("tpl").value = "bacen"; $("tpl").dispatchEvent(new Event("change"));   // só C/E, +1 / −0,5
+$("mConc").value = "BACEN"; $("mConc").dispatchEvent(new Event("change"));
+$("mMat").value = "Estados"; $("mMat").dispatchEvent(new Event("change"));
+$("mSub").value = ""; $("mSub").dispatchEvent(new Event("change"));
+$("mFonte").value = ""; $("mFonte").dispatchEvent(new Event("change"));
+cfgA = 8; pintaEixos();
+$("nIn").value = "1"; apelidos = {}; paintApelidos();
+$("startBtn").click();
+select(1);
+const its = () => [...document.querySelectorAll("#answerArea .item")];
+const marca = (i, txt) => [...its()[i].querySelectorAll(".opts button")]
+  .find(b => b.textContent === txt).click();
+const flag = (i, f) => [...its()[i].querySelectorAll(".flags button")]
+  .find(b => b.textContent === f).click();
+
+marca(0, "Vc");                 // C_m
+marca(1, "Vc");                 // E_m
+marca(2, "V?"); flag(2, "B");   // C_B
+marca(3, "V?"); flag(3, "B");   // E_B
+marca(4, "—");                  // S
+flag(5, "T");                   // T
+marca(6, "Vc");                 // vai virar anulado
+marca(7, "Vc");                 // fica sem gabarito
+setRunning(false);
+
+// T zera a marcação e trava o resto
+EQ("T vira branco automaticamente",
+   [ans[1].itens[5].r, ans[1].itens[5].c, ans[1].itens[5].B], ["-", null, false]);
+EQ("e trava os botoes de resposta daquele item",
+   [...its()[5].querySelectorAll(".opts button")].every(b => b.disabled), true);
+EQ("B fica indisponivel sem resposta", [...its()[5].querySelectorAll(".flags button")]
+   .find(b => b.textContent === "B").disabled, true);
+EQ("o item aparece marcado como sem tempo", its()[5].className.includes("semtempo"), true);
+EQ("os outros itens seguem livres",
+   [...its()[0].querySelectorAll(".opts button")].some(b => b.disabled), false);
+// marcar T por cima de uma resposta apaga a resposta
+marca(6, "Fx"); flag(6, "T");
+EQ("T por cima de resposta apaga a resposta", ans[1].itens[6].r, "-");
+EQ("e o log registra que zerou", events[events.length - 1].zerou, true);
+flag(6, "T"); marca(6, "Vc");   // desfaz e remarca
+
+gab[1] = { itens: ["V", "F", "V", "F", "V", "V", "X", null], num: "" };
+const X = () => indices();
+
+EQ("C_m", X().C_m, 1);
+EQ("E_m", X().E_m, 1);
+EQ("C_B", X().C_B, 1);
+EQ("E_B", X().E_B, 1);
+EQ("S — enfrentei e nao tive palpite", X().S, 1);
+EQ("T — nao alcancei por tempo", X().T, 1);
+EQ("anulado fica fora", X().anulados, 1);
+EQ("sem gabarito fica fora", X().sem_gabarito, 1);
+EQ("I = os seis somados", X().I, 6);
+EQ("a identidade fecha", X().identidade_fecha, true);
+EQ("nenhum item ficou sem destino",
+   X().C_m + X().E_m + X().C_B + X().E_B + X().S + X().T + X().anulados + X().sem_gabarito,
+   ans[1].itens.length);
+
+// pontuação: +1 no acerto, −0,5 no erro; B rende 0 e tira 0
+EQ("pontos liquidos = C_m·(+1) + E_m·(−0,5)", X().pontos, 0.5);
+EQ("pontos em jogo = os 6 itens validos", X().pontos_em_jogo, 6);
+EQ("real = liquido / em jogo", X().real, 0.0833);
+EQ("ignorando B, o palpite certo entra e o errado tambem",
+   [X().pontos_ignorando_B, X().real_ignorando_B], [1, 0.1667]);
+
+EQ("acerto do enfrentado = (C_m+C_B) / opinou", X().acerto_do_enfrentado, 0.5);
+EQ("branco por tempo = T/I", X().branco_por_tempo, 0.1667);
+EQ("branco por conceito = S/I", X().branco_por_conceito, 0.1667);
+EQ("branco por disciplina = (C_B+E_B)/I", X().branco_por_disciplina, 0.3333);
+EQ("valor do branco = (E_B−C_B)/I", X().valor_do_branco, 0);
+EQ("acerto B-palpite = C_B/(C_B+E_B)", X().acerto_B_palpite, 0.5);
+EQ("acerto por certeza", X().acerto_certeza, 0.5);
+EQ("acerto por duvida", X().acerto_duvida, 0.5);
+EQ("sem chutes, o indice fica vazio e nao zero", X().acerto_chute, null);
+
+// a fórmula crua (C_m−E_m)/I é o caso particular de pesos +1/−1
+pesos.A = { acerto: 1, erro: -1 };
+EQ("com +1/−1 o real reduz a (C_m−E_m)/I",
+   indices().real, Math.round((1 - 1) / 6 * 10000) / 10000);
+pesos.A = { acerto: 1, erro: -0.5 };
+
+// valor do branco em contagem engana quando o erro nao pune
+pesos.A = { acerto: 1, erro: 0 };
+EQ("em contagem, a disciplina parece neutra", indices().valor_do_branco, 0);
+EQ("em pontos, ela custou o acerto que voce abriu mao",
+   indices().valor_do_branco_pontos, -0.1667);
+pesos.A = { acerto: 1, erro: -0.5 };
+
+const h12 = buildCSV().split("\n").filter(l => l.startsWith("#"));
+const v12 = k => (h12.find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];
+EQ("as primitivas vao no bloco",
+   ["C_m", "E_m", "C_B", "E_B", "S", "T", "I"].map(v12), ["1", "1", "1", "1", "1", "1", "6"]);
+EQ("e a identidade e declarada fechada", v12("identidade_fecha"), "1");
+EQ("os indices tambem",
+   [v12("real"), v12("acerto_do_enfrentado"), v12("branco_por_tempo")],
+   ["0.0833", "0.5", "0.1667"]);
+EQ("o estado entra no arquivo de estatisticas",
+   buildEstat().split("\n").find(l => l.startsWith("tipo,")),
+   "tipo,confianca,sem_tempo,deixaria_branco,resultado,estado,itens,pontos");
+EQ("e cada linha carrega um dos seis",
+   buildEstat().split("\n").filter(l => /^A,/.test(l))
+     .map(l => l.split(",")[5]).sort().join(" "),
+   "C_B C_m E_B E_m S T anulado sem_gabarito");
+EQ("o jsonl leva os indices inteiros",
+   JSON.parse(buildJSONL().split("\n")[0]).indices.I, 6);
 
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +
