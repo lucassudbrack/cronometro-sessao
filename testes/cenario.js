@@ -143,14 +143,14 @@ const cols = csv.find(l => l.startsWith("q,tipo"));
 const rows = csv.slice(csv.indexOf(cols) + 1);
 EQ("um unico cabecalho de colunas", csv.filter(l => l.startsWith("q,tipo")).length, 1);
 EQ("nenhuma linha antes do bloco de comentario", csv[0].startsWith("#"), true);
-EQ("colunas", cols, "q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar");
+EQ("colunas", cols, "q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito");
 EQ("rotulo com virgula fica citado",
    head.find(l => l.startsWith("# rotulo")), '# rotulo,"teste, com virgula"');
 EQ("materia no bloco", head.find(l => l.startsWith("# materia")), "# materia,Estatística");
-EQ("linha da Q1", rows[0], '1,A,5,"Vc F? Vc - FxB",,90,01:30,3,,1');
-EQ("linha da Q2 tipo B", rows[1], '2,B,3,"?",042,30,00:30,1,,');
-EQ("linha da Q3", rows[2], '3,,,"",,15,00:15,1,,1');
-EQ("linha da Q4 com pagina", rows[3], '4,,,"",,50,00:50,1,7-8,');
+EQ("linha da Q1", rows[0], '1,A,5,"Vc F? Vc - FxB",,90,01:30,3,,1,""');
+EQ("linha da Q2 tipo B", rows[1], '2,B,3,"?",042,30,00:30,1,,,""');
+EQ("linha da Q3", rows[2], '3,,,"",,15,00:15,1,,1,""');
+EQ("linha da Q4 com pagina", rows[3], '4,,,"",,50,00:50,1,7-8,,""');
 EQ("duracao total no bloco",
    head.find(l => l.startsWith("# duracao_total")), "# duracao_total,03:05");
 EQ("Q3 fechada quando o fechamento parou o cronometro", Math.round(times[3]), 15);
@@ -301,6 +301,114 @@ EQ("param por questao no CSV", r5.slice(0, 3).map(l => l.split(",").slice(0, 3).
    ["1|A|2", "2|ME|3", "3|B|2"]);
 EQ("o bloco declara o eixo em aberto",
    csv5.find(l => l.startsWith("# ce_itens")), "# ce_itens,na hora");
+
+/* ---- cenário 6: gabarito ---- */
+cfgA = 3; cfgME = 4; cfgB = 2; pintaEixos();
+$("nIn").value = "4"; $("startBtn").click();
+
+select(1); document.querySelector('#typeRow button[data-t="A"]').click();
+// item1 V (vai conferir) · item2 F (vai divergir) · item3 branco
+[["V", 0], ["F", 1]].forEach(([L, i]) => {
+  const bs = [...document.querySelectorAll("#answerArea .item")][i].querySelectorAll(".opts button");
+  bs[L === "V" ? 0 : 3].click();
+});
+[...document.querySelectorAll("#answerArea .item")][2].querySelectorAll(".opts button")[6].click(); // —
+EQ("Q1 marcada", ans[1].itens.map(itemStr).join(" "), "Vc Fc -");
+
+select(2); document.querySelector('#typeRow button[data-t="ME"]').click();
+[...document.querySelectorAll("#answerArea .opts button")].find(b => b.textContent === "Cc").click();
+
+select(3); document.querySelector('#typeRow button[data-t="B"]').click();
+["4", "2"].forEach(d =>
+  [...document.querySelectorAll("#answerArea .numpad button")].find(b => b.textContent === d).click());
+select(4); adv(5000);     // visitada, cronometrada, mas sem tipo declarado
+setRunning(false);
+
+// abrir o gabarito sem ter marcado olhar avisa, e recusar volta pro fechamento
+window.__confirmYes = false;
+$("expBtn").click(); $("endGab").click();
+EQ("sem olhar marcado, recusar nao abre o gabarito", gabAberto, null);
+EQ("e volta para o fechamento", $("endSheet").classList.contains("hide"), false);
+$("olharGrid").children[0].click();
+EQ("olhar antes do gabarito nao vem carimbado",
+   events[events.length - 1].pos_gabarito, undefined);
+
+window.__confirmYes = true;
+$("endGab").click();
+EQ("gabarito abriu", $("paneGab").classList.contains("on"), true);
+EQ("o instante de ver o gabarito ficou registrado", typeof gabAberto, "string");
+EQ("e virou evento", events.some(e => e.ev === "gabarito_aberto"), true);
+EQ("so lista questoes com tipo e formato", [...$("gabList").querySelectorAll(".gq")].length, 3);
+EQ("a Q4 sem tipo fica de fora, mas avisada",
+   /Q4/.test($("gabList").querySelector(".gwarn") ? $("gabList").querySelector(".gwarn").textContent : ""), true);
+
+const bloco = q => [...$("gabList").querySelectorAll(".gq")]
+  .find(b => b.querySelector(".qq").textContent === "Q" + q);
+const clicaGab = (q, col, txt) => {
+  const b = bloco(q);
+  const alvo = col === null ? b.querySelector(".grow")
+                            : b.querySelectorAll(".gcol")[col];
+  [...alvo.querySelectorAll("button")].find(x => x.textContent === txt).click();
+};
+
+EQ("tipo A tem uma coluna por item", bloco(1).querySelectorAll(".gcol").length, 3);
+EQ("cada coluna oferece V, F e X",
+   [...bloco(1).querySelectorAll(".gcol")[0].querySelectorAll("button")].map(b => b.textContent),
+   ["V", "F", "X"]);
+EQ("ME oferece A-D mais X",
+   [...bloco(2).querySelectorAll(".grow button")].map(b => b.textContent),
+   ["A", "B", "C", "D", "X"]);
+
+clicaGab(1, 0, "V");   // confere com Vc
+clicaGab(1, 1, "V");   // diverge de Fc
+clicaGab(1, 2, "F");   // item em branco
+EQ("gabarito da Q1 gravado", gab[1].itens, ["V", "V", "F"]);
+EQ("item que confere", confere(1, 0), "ok");
+EQ("item que diverge", confere(1, 1), "erro");
+EQ("item em branco nao conta como erro", confere(1, 2), "branco");
+
+clicaGab(2, null, "C");
+EQ("ME confere", confere(2, 0), "ok");
+clicaGab(2, null, "C");
+EQ("tocar de novo desmarca", gab[2].itens[0], null);
+clicaGab(2, null, "B");
+EQ("ME diverge", confere(2, 0), "erro");
+
+const inpB = bloco(3).querySelector("input");
+inpB.value = "42"; inpB.dispatchEvent(new Event("input")); inpB.dispatchEvent(new Event("change"));
+EQ("conta confere", confere(3, 0), "ok");
+EQ("o numero do gabarito ficou", gab[3].num, "42");
+
+// anulada tira o item da contagem de julgáveis da prova
+EQ("julgaveis antes de anular", itensDoSet(), 5);   // 3 (A) + 1 (ME) + 1 (B)
+clicaGab(1, 1, "X");
+EQ("item anulado", confere(1, 1), "anulado");
+EQ("anulado sai da contagem de julgaveis", itensDoSet(), 4);
+EQ("contagem crua", (c => [c.ok, c.erro, c.branco, c.anulado, c.sem])(tally()),
+   [2, 1, 1, 1, 0]);
+
+// olhar marcado depois do gabarito sai carimbado
+$("gabBack").click();
+$("olharGrid").children[3].click();
+EQ("olhar depois do gabarito vem carimbado",
+   events[events.length - 1].pos_gabarito, true);
+
+// export
+const csv6 = buildCSV().split("\n");
+const c6 = csv6.find(l => l.startsWith("q,tipo"));
+const r6 = csv6.slice(csv6.indexOf(c6) + 1);
+EQ("gabarito de tipo A na coluna, com o anulado",
+   r6[0].split(",").pop(), '"V X F"');
+EQ("gabarito de ME", r6[1].split(",").pop(), '"B"');
+EQ("gabarito de conta e o numero", r6[2].split(",").pop(), '"42"');
+EQ("bloco traz a contagem",
+   csv6.filter(l => /^# itens_(conferem|divergem|anulados)/.test(l)),
+   ["# itens_conferem,2", "# itens_divergem,1", "# itens_anulados,1"]);
+EQ("bloco registra quando o gabarito foi visto",
+   /^# gabarito_visto_em,20/.test(csv6.find(l => l.startsWith("# gabarito_visto_em"))), true);
+const jl6 = buildJSONL().split("\n").map(JSON.parse);
+EQ("meta leva o gabarito inteiro", jl6[0].gabarito[1].itens, ["V", "X", "F"]);
+EQ("meta leva a contagem", jl6[0].conferencia.ok, 2);
 
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +

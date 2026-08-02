@@ -181,9 +181,31 @@
   .ograde{display:grid; gap:5px; grid-template-columns:repeat(auto-fill,minmax(42px,1fr))}
   .ograde button{padding:9px 0; font-family:var(--mono); font-size:13px; text-transform:none; letter-spacing:0}
   .ograde button.sel{background:var(--teal); border-color:var(--teal); color:#fff}
-  .endbtns{display:grid; grid-template-columns:auto 1fr; gap:6px; margin-top:4px}
-  .endbtns button{padding:13px 14px}
+  .endbtns{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:4px}
+  .endbtns button{padding:13px 4px}
   .endbtns button.alerta{border-color:var(--alert); color:var(--alert)}
+
+  /* gabarito */
+  .gq{border:1px solid var(--line); border-radius:4px; padding:8px; margin-bottom:8px; background:var(--chassis-2)}
+  .gqhead{display:flex; align-items:baseline; gap:8px; margin-bottom:7px}
+  .gqhead .qq{font-family:var(--mono); font-weight:800; font-size:14px}
+  .gqhead .sub{font-family:var(--mono); font-size:9px; color:var(--dim); flex:1}
+  .gcols{display:grid; gap:4px; grid-template-columns:repeat(auto-fit,minmax(0,1fr))}
+  .gcol{display:flex; flex-direction:column; gap:3px}
+  .gcol .ix{font-family:var(--mono); font-size:8px; color:var(--dim); text-align:center}
+  .gcol button, .grow button{padding:8px 0; font-family:var(--mono); font-size:12px;
+    text-transform:none; letter-spacing:0}
+  .gcol button.sel, .grow button.sel{background:var(--teal); border-color:var(--teal); color:#fff}
+  .gcol button.nula.sel, .grow button.nula.sel{background:var(--dim); border-color:var(--dim); color:var(--paper)}
+  .grow{display:flex; gap:4px}
+  .grow button{flex:1}
+  .grow input{flex:1; font-size:15px; text-align:center; letter-spacing:.2em; padding:7px}
+  .grow .nula{flex:0 0 62px}
+  .gtally{font-family:var(--mono); font-size:11px; line-height:1.7; color:var(--mute);
+    border:1px solid var(--line); border-left:3px solid var(--teal); border-radius:3px;
+    padding:8px 10px; margin-bottom:10px}
+  .gtally b{color:var(--paper); font-weight:600}
+  .gwarn{color:var(--dim); font-size:10px; line-height:1.5; padding:8px 4px}
   .toast{position:fixed; left:50%; bottom:64px; transform:translateX(-50%); background:var(--teal);
     color:#fff; font-size:12px; font-weight:600; padding:8px 14px; border-radius:20px; opacity:0;
     transition:opacity .2s; pointer-events:none; z-index:9}
@@ -226,6 +248,15 @@
 </div>
 
 <div class="pane" id="paneLog"></div>
+
+<div class="pane" id="paneGab">
+  <div class="qhead">
+    <button id="gabBack">Fechamento</button>
+    <div class="sp"></div>
+    <span class="eyebrow" id="gabCount"></span>
+  </div>
+  <div id="gabList"></div>
+</div>
 
 <div class="pane" id="paneRev">
   <div class="qhead">
@@ -302,6 +333,7 @@
   <div class="endbtns">
     <button id="endBack">Voltar</button>
     <button id="endRev">Conferir</button>
+    <button id="endGab">Gabarito</button>
   </div>
   <button class="primary" id="endExp" style="padding:14px">Exportar</button>
   <datalist id="vMat"></datalist><datalist id="vSub"></datalist><datalist id="vFonte"></datalist>
@@ -334,6 +366,10 @@ let pags={};
 // marcadas antes do gabarito.
 const fichaVazia=()=>({mat:"",sub:"",fonte:"",regime:"",tipo:"",itens:""});
 let ficha=fichaVazia(), olhar={};
+// Gabarito da prova, preenchido no fim. gabAberto guarda o instante em que
+// você viu o gabarito pela primeira vez: é a linha que separa escolha limpa de
+// escolha contaminada, e o que vier de olhar depois dela sai carimbado.
+let gab={}, gabAberto=null;
 let running=false, segStart=null, sessionAccum=0, sessionStart=null, started=false, curQ=null;
 let exported=false, pending=null, revisando=false;
 
@@ -356,7 +392,9 @@ const sec1 = x => Math.round(x*10)/10;   // o log guarda décimos; o CSV arredon
 // rev marca o que foi corrigido na conferência, depois do relógio: uma marcação
 // feita sob pressão de tempo e uma correção posterior não são o mesmo dado.
 function ev(o){
-  events.push(Object.assign({t:iso(Date.now())}, o, revisando?{rev:true}:{}));
+  events.push(Object.assign({t:iso(Date.now())}, o, revisando?{rev:true}:{},
+    // olhar marcado depois de ver o gabarito não é a mesma escolha que antes
+    (gabAberto && o.ev==="olhar") ? {pos_gabarito:true} : {}));
   exported=false; saveNow();
 }
 
@@ -413,7 +451,7 @@ function select(q, keepPane){
 
 /* ---------- panes ---------- */
 function showPane(id){
-  ["paneGrid","paneQ","paneLog","paneRev"].forEach(p=>$(p).classList.toggle("on", p===id));
+  ["paneGrid","paneQ","paneLog","paneRev","paneGab"].forEach(p=>$(p).classList.toggle("on", p===id));
   $("viewBtn").textContent = id==="paneLog" ? "Grade" : "Trilha";
 }
 function openQ(q){ curQ=q; renderQ(); showPane("paneQ"); }
@@ -685,7 +723,7 @@ function snapshot(){
       vis.sec+=d; t[visit.q]=(t[visit.q]||0)+d;
     }
   }
-  return {fmt:2,N,goal,cfgA,cfgME,cfgB,tag,times:t,log,visit:vis,ans,pags,ficha,olhar,events,
+  return {fmt:2,N,goal,cfgA,cfgME,cfgB,tag,times:t,log,visit:vis,ans,pags,ficha,olhar,gab,gabAberto,events,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -723,6 +761,7 @@ function retomar(prev){
     if(a.tipo==="B"  && a.dig===undefined) a.dig=3;
   });
   pags=prev.pags||{}; ficha=Object.assign(fichaVazia(),prev.ficha||{}); olhar=prev.olhar||{};
+  gab=prev.gab||{}; gabAberto=prev.gabAberto||null;
   if(prev.visit){
     // A passada que estava aberta vira passada fechada, valendo o que foi medido
     // até o último registro. trunc diz que esse número é piso, não medida completa.
@@ -743,6 +782,163 @@ setInterval(()=>{ if(running) saveNow(); }, 5000);
 // Última chance antes de a aba morrer de morte anunciada.
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) saveNow(); });
 window.addEventListener("pagehide",saveNow);
+
+/* ---------- gabarito ----------
+   Preenchido depois da conferência, lendo o gabarito da prova. Espelha a forma
+   de ans[q]: um valor por item em A, um por questão em ME e B. "X" é anulada —
+   é o que tira o item da contagem de julgáveis da prova.
+   Usa V/F e não C/E de propósito: é o mesmo alfabeto da folha, então comparar
+   resposta com gabarito é igualdade de string, sem tabela de tradução no meio. */
+const NULA="X";
+function gabDe(q){
+  const a=ans[q]; if(!a || paramDe(a)==null) return null;
+  if(!gab[q]) gab[q]={itens:a.itens.map(()=>null), num:""};
+  const g=gab[q];
+  while(g.itens.length < a.itens.length) g.itens.push(null);   // itens cresceram depois
+  while(g.itens.length > a.itens.length) g.itens.pop();
+  return g;
+}
+const anulado=(q,i)=>{ const g=gab[q]; return !!(g && g.itens[i]===NULA); };
+// "ok" o item confere · "erro" diverge · "branco" não respondida · "anulado"
+// fora da prova · "sem" ainda não tem gabarito.
+function confere(q,i){
+  const a=ans[q], g=gab[q];
+  if(!a || !g) return "sem";
+  if(g.itens[i]===NULA) return "anulado";
+  const it=a.itens[i];
+  if(a.tipo==="B"){
+    if(!g.num) return "sem";
+    if(it.r==="-" || !a.num) return "branco";
+    return a.num===g.num ? "ok" : "erro";
+  }
+  if(g.itens[i]==null) return "sem";
+  if(it.r===null) return "branco";
+  if(it.r==="-")  return "branco";
+  return it.r===g.itens[i] ? "ok" : "erro";
+}
+function tally(){
+  const c={ok:0,erro:0,branco:0,anulado:0,sem:0};
+  for(let q=1;q<=N;q++){
+    const a=ans[q]; if(!a || paramDe(a)==null) continue;
+    a.itens.forEach((_,i)=>c[confere(q,i)]++);
+  }
+  return c;
+}
+// Julgáveis da prova: os que existem, brancos incluídos, anulados fora.
+function itensDoSet(){
+  let n=0;
+  for(let q=1;q<=N;q++){
+    const a=ans[q]; if(!a || paramDe(a)==null) continue;
+    a.itens.forEach((_,i)=>{ if(!anulado(q,i)) n++; });
+  }
+  return n;
+}
+function setGab(q,i,v){
+  const g=gabDe(q); if(!g) return;
+  g.itens[i] = g.itens[i]===v ? null : v;      // tocar de novo desmarca
+  ev({ev:"gab",q:q,item:i+1,valor:g.itens[i]});
+  paintGab();
+}
+function paintGab(){
+  const c=tally();
+  const base=c.ok+c.erro+c.branco;
+  $("gabCount").textContent = (c.sem?c.sem+" sem gabarito · ":"")+
+    c.ok+"/"+(base||0)+" conferem";
+  const el=$("gabList"); el.innerHTML="";
+
+  const n=(v,s,p)=>"<b>"+v+"</b> "+(v===1?s:p);
+  const t=document.createElement("div"); t.className="gtally";
+  t.innerHTML=n(c.ok,"confere","conferem")+" · "+n(c.erro,"diverge","divergem")+" · "+
+    n(c.branco,"em branco","em branco")+"<br>"+
+    n(c.anulado,"anulado","anulados")+" (fora da prova) · "+
+    n(c.sem,"ainda sem gabarito","ainda sem gabarito")+"<br>"+
+    "<span style='color:var(--dim)'>contagem crua de itens, não é nota — a regra de pontuação é da prova, não do app</span>";
+  el.appendChild(t);
+
+  let algum=false;
+  for(let q=1;q<=N;q++){
+    const a=ans[q]; if(!a || paramDe(a)==null) continue;
+    algum=true;
+    const g=gabDe(q);
+    const box=document.createElement("div"); box.className="gq";
+    const h=document.createElement("div"); h.className="gqhead";
+    h.innerHTML='<span class="qq"></span><span class="sub"></span>';
+    h.querySelector(".qq").textContent="Q"+q;
+    h.querySelector(".sub").textContent =
+      a.tipo==="A" ? a.itens.length+" itens · V certo, F errado, X anulada"
+    : a.tipo==="ME" ? a.alt+" alternativas · X anulada"
+    : a.dig+" dígitos · X anulada";
+    box.appendChild(h);
+
+    if(a.tipo==="A"){
+      const g2=document.createElement("div"); g2.className="gcols";
+      a.itens.forEach((_,i)=>{
+        const col=document.createElement("div"); col.className="gcol";
+        const ix=document.createElement("div"); ix.className="ix"; ix.textContent=i+1;
+        col.appendChild(ix);
+        ["V","F",NULA].forEach(v=>{
+          const b=document.createElement("button");
+          b.textContent=v;
+          b.className=(g.itens[i]===v?"sel ":"")+(v===NULA?"nula":"");
+          b.onclick=()=>setGab(q,i,v);
+          col.appendChild(b);
+        });
+        g2.appendChild(col);
+      });
+      box.appendChild(g2);
+    } else if(a.tipo==="ME"){
+      const row=document.createElement("div"); row.className="grow";
+      LETRAS.slice(0,a.alt).split("").concat([NULA]).forEach(v=>{
+        const b=document.createElement("button");
+        b.textContent=v;
+        b.className=(g.itens[0]===v?"sel ":"")+(v===NULA?"nula":"");
+        b.onclick=()=>setGab(q,0,v);
+        row.appendChild(b);
+      });
+      box.appendChild(row);
+    } else {
+      const row=document.createElement("div"); row.className="grow";
+      const inp=document.createElement("input");
+      inp.inputMode="numeric"; inp.autocomplete="off"; inp.maxLength=a.dig;
+      inp.placeholder="—".repeat(a.dig); inp.value=g.num||"";
+      inp.disabled = g.itens[0]===NULA;
+      inp.oninput=()=>{ g.num=inp.value.replace(/\D/g,"").slice(0,a.dig);
+        if(inp.value!==g.num) inp.value=g.num; save(); };
+      inp.onchange=()=>{ ev({ev:"gab",q:q,num:g.num}); paintGab(); };
+      row.appendChild(inp);
+      const b=document.createElement("button");
+      b.textContent=NULA; b.className=(g.itens[0]===NULA?"sel ":"")+"nula";
+      b.onclick=()=>{ if(g.itens[0]!==NULA) g.num=""; setGab(q,0,NULA); };
+      row.appendChild(b);
+      box.appendChild(row);
+    }
+    el.appendChild(box);
+  }
+  // appendChild e não innerHTML+=: concatenar innerHTML reconstrói a subárvore
+  // inteira e leva junto todo onclick atribuído por JS — os botões acima
+  // ficariam desenhados e mortos.
+  const aviso=t=>{ const d=document.createElement("div"); d.className="gwarn";
+    d.textContent=t; el.appendChild(d); };
+  if(!algum) aviso("Nenhuma questão tem tipo e formato declarados ainda — sem isso não dá para montar a folha do gabarito.");
+  const semTipo=[]; for(let q=1;q<=N;q++){ const a=ans[q];
+    if((a && paramDe(a)==null) || (!a && (times[q]||pags[q]))) semTipo.push(q); }
+  if(semTipo.length) aviso("Fora da lista: Q"+semTipo.join(", Q")+
+    " — sem tipo ou sem formato declarado. Volte à conferência para completar.");
+}
+function openGab(){
+  setRunning(false); sairRev(); closeEnd();
+  if(!gabAberto){
+    if(!olharList().length &&
+       !confirm("Você ainda não marcou nada em Olhar depois. Depois de ver o gabarito essa escolha já está contaminada. Abrir mesmo assim?")){
+      openEnd(); return;
+    }
+    gabAberto=iso(Date.now());
+    ev({ev:"gabarito_aberto"});
+  }
+  paintGab(); showPane("paneGab");
+}
+$("endGab").onclick=openGab;
+$("gabBack").onclick=openEnd;
 
 /* ---------- conferencia ----------
    falta = a análise posterior perde informação sem isso.
@@ -849,16 +1045,6 @@ function paintVocab(){
       v.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;")+'">').join("");
   });
 }
-// Julgáveis declarados neste set. Questão sem tipo escolhido não conta —
-// o app não sabe quantos itens ela tem e não vai supor.
-function itensDoSet(){
-  let n=0;
-  for(let q=1;q<=N;q++){
-    const a=ans[q]; if(!a || paramDe(a)==null) continue;
-    n += a.tipo==="A" ? a.itens.length : 1;
-  }
-  return n;
-}
 function paintOlhar(){
   const g=$("olharGrid"); g.innerHTML="";
   for(let i=1;i<=N;i++){
@@ -898,6 +1084,15 @@ $("endBack").onclick=closeEnd;
 /* ---------- export ---------- */
 const csvv = s => { s=String(s==null?"":s); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
 const olharList = () => Object.keys(olhar).filter(q=>olhar[q]).map(Number).sort((a,b)=>a-b);
+// Em A sai um valor por item, na mesma ordem da coluna itens. Em ME a letra
+// certa. Em B o número — não precisa de coluna separada porque o gabarito não
+// tem confiança para disputar espaço com ele.
+function gabStr(q){
+  const a=ans[q], g=gab[q];
+  if(!a || !g) return "";
+  if(a.tipo==="B") return g.itens[0]===NULA ? NULA : (g.num||"");
+  return a.itens.map((_,i)=>g.itens[i]||"-").join(" ").replace(/^[-\s]+$/,"");
+}
 function itemStr(it){
   if(it.r===null) return "";
   if(it.r==="-") return "-";
@@ -927,7 +1122,15 @@ function buildCSV(){
   L.push("# duracao_total,"+fmt(sessionLive()));
   L.push("# olhar,"+csvv(olharList().join(" ")));
   L.push("# param,"+csvv("tipo A: nº de itens · ME: nº de alternativas · B: nº de dígitos"));
-  L.push("q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar");
+  L.push("# gabarito,"+csvv("mesmo alfabeto de itens · X = anulada · vazio = sem gabarito"));
+  const tl=tally();
+  L.push("# gabarito_visto_em,"+(gabAberto||""));
+  L.push("# itens_conferem,"+tl.ok);
+  L.push("# itens_divergem,"+tl.erro);
+  L.push("# itens_em_branco,"+tl.branco);
+  L.push("# itens_anulados,"+tl.anulado);
+  L.push("# itens_sem_gabarito,"+tl.sem);
+  L.push("q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito");
   for(let q=1;q<=N;q++){
     const a=ans[q]; const t=times[q]||0;
     if(!a && !t && !pags[q] && !olhar[q]) continue;
@@ -935,7 +1138,7 @@ function buildCSV(){
     const itens = a && a.tipo!=="B" ? a.itens.map(itemStr).join(" ").trim() : (a?itemStr(a.itens[0]).replace(/^[0-9]+/,""):"");
     const num = a && a.tipo==="B" ? (a.num||(a.itens[0].r==="-"?"-":"")) : "";
     L.push([q,tipo,paramDe(a)||"",'"'+itens+'"',num,Math.round(t),fmt(t),passes(q),
-            csvv(pags[q]||""),olhar[q]?1:""].join(","));
+            csvv(pags[q]||""),olhar[q]?1:"",'"'+gabStr(q)+'"'].join(","));
   }
   return L.join("\n");
 }
@@ -952,7 +1155,8 @@ function buildJSONL(){
     materia:ficha.mat||null, subtopico:ficha.sub||null, fonte:ficha.fonte||null,
     regime:ficha.regime||null, tipo_sessao:ficha.tipo||null,
     itens_da_prova:ficha.itens?+ficha.itens:null, itens_julgaveis_no_set:itensDoSet(),
-    olhar:olharList(), pags:Object.assign({},pags)};
+    olhar:olharList(), pags:Object.assign({},pags),
+    gabarito_visto_em:gabAberto, gabarito:Object.assign({},gab), conferencia:tally()};
   return [meta].concat(rows).map(o=>JSON.stringify(o)).join("\n");
 }
 function dl(name,txt,mime){
@@ -1033,7 +1237,7 @@ $("startBtn").onclick=()=>{
   const g=parseFloat(String($("goalIn").value).replace(",","."));
   N=n; goal = g>0 ? g*60 : 0; tag=$("tagIn").value.trim();
   times={}; log=[]; visit=null; ans={}; pags={}; events=[]; sessionAccum=0; sessionStart=null; running=false;
-  ficha=fichaVazia(); olhar={}; curQ=null;
+  ficha=fichaVazia(); olhar={}; gab={}; gabAberto=null; curQ=null;
   document.body.classList.remove("running","paused"); $("toggle").textContent="Pausar";
   const eixo = v => v===0 ? "na hora" : v;
   started=true; ev({ev:"start",questoes:N,rotulo:tag,

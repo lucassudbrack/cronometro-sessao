@@ -26,11 +26,18 @@ instalou.
 ```js
 ans[q] = {
   tipo: "A" | "ME" | "B",
-  itens: [ { r, c, B, T } ],   // A: 5 ou 1 item · ME e B: 1 item
-  num: "042"                    // só tipo B
+  itens: [ { r, c, B, T } ],   // A: n itens · ME e B: 1 item
+  alt: 5,                       // só ME — quantas alternativas
+  dig: 3,                       // só B  — quantos dígitos
+  num: "042"                    // só B
 }
 pags[q] = "7-8"                 // página do caderno, número ou intervalo
+gab[q]  = { itens: ["V","F","X"], num: "042" }   // gabarito · X = anulada
 ```
+
+O formato tem três eixos — itens de C/E, alternativas de múltipla, dígitos de
+conta. Cada um é fixado no setup ou fica **na hora**, e aí a questão declara o
+seu ao ser aberta. O tipo nunca é decidido no setup.
 
 | campo | significado |
 |---|---|
@@ -49,7 +56,13 @@ pags[q] = "7-8"                 // página do caderno, número ou intervalo
 - **Revisita é dado de primeira classe.** Tempo fragmentado ≠ tempo contínuo.
 - **Corrigir depois não é nova passada.** A conferência abre a questão sem ligar
   o cronômetro, e a correção sai carimbada com `rev` no log.
-- **O tipo da questão se descobre ao ler**, não no setup.
+- **O tipo da questão se descobre ao ler**, não no setup. O mesmo vale para o
+  formato quando o eixo ficou em aberto: sem a declaração, a folha não abre —
+  o app não supõe cinco itens porque cinco é o comum.
+- **Anulada tira o item da prova.** É por isso que o gabarito alimenta a
+  contagem de julgáveis: existentes, brancos incluídos, anulados fora.
+- **Olhar depois se marca antes do gabarito.** O app registra o instante em que
+  você abriu o gabarito e carimba `pos_gabarito` no que for marcado depois.
 
 ## Saída
 
@@ -60,14 +73,17 @@ Dois arquivos. O primário é o segundo.
 ```
 # materia,Estatística
 # fonte,ANPEC 2014
-q,tipo,itens,numerica,segundos,mmss,passadas,pag,olhar
-1,A,"Vc F? Vc - FxB",,384,06:24,2,7-8,1
-9,B,"c",42,201,03:21,1,12,
+# itens_conferem,2
+q,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito
+1,A,5,"Vc F? Vc - FxB",,384,06:24,2,7-8,1,"V F V X F"
+9,B,3,"c",42,201,03:21,1,12,,"042"
 ```
 
 O bloco de metadados são linhas de comentário `#` — leia com
 `pandas.read_csv(f, comment="#")`. No tipo B a resposta vai em `numerica` e a
-coluna `itens` carrega a confiança e as flags daquele item.
+coluna `itens` carrega a confiança e as flags daquele item. `param` é o nº de
+itens em A, de alternativas em ME, de dígitos em B. `gabarito` usa o mesmo
+alfabeto de `itens`, com `X` para anulada e vazio para sem gabarito.
 
 `eventos-<stamp>.jsonl` — log append-only, cronológico, uma linha por evento
 (`meta`, `passada`, `enter`, `leave`, `mark`, `flag`, `pag`, `ficha`, `olhar`,
