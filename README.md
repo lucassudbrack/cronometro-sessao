@@ -126,10 +126,10 @@ A identidade é auto-auditável: se não fechar, há item sem destino.
 | `E_m` | marquei e errei |
 | `C_B` | declarei que deixaria em branco, e o palpite acertou |
 | `E_B` | declarei que deixaria em branco, e o palpite errou |
-| `S` | enfrentei e não tive nem palpite |
+| `N` | em branco com B: enfrentei e não tenho nem direção |
 | `T` | não alcancei por tempo |
 
-    C_m + E_m + C_B + E_B + S + T = I      (anulado e sem gabarito fora)
+    C_m + E_m + C_B + E_B + N + T + itens_nao_preenchidos = I
 
 Item **sem gabarito fica fora de tudo** — de I, dos pontos e de todos os
 índices. Uma questão que você respondeu mas cuja chave não preencheu some sem
@@ -156,12 +156,18 @@ e erra 0) continua dizendo a verdade, o que a fração crua não faria. Pelo mes
 motivo sai também `valor_do_branco_pontos`: quando o erro não pune, a versão em
 contagem diz que a disciplina é neutra, e ela custou o acerto que você abriu mão.
 
-**O app registra a declaração, não a causa.** `T` é você tendo tocado T.
-`S` é o resíduo: ficou em branco e você não declarou nada — pode ser
-desconhecimento, esquecimento de tocar T ou pulo estratégico. Por isso não há
-índice chamado "branco por conceito": batizar um resíduo de causa é o app
-afirmando o que não observa. As contagens `T`, `S` e `I` saem no bloco e a
-divisão é de quem analisa, com o caderno aberto na página da coluna `pag`.
+**Só existem dois brancos legítimos.** `N` é branco com a flag B: enfrentei e
+não tenho nem direção. `T` é não alcancei por tempo. Item sem resposta e sem
+flag nenhuma não é estado da prova — é lacuna de preenchimento, conta em
+`itens_nao_preenchidos`, e a conferência cobra: em sessão fechada tem que ser
+zero.
+
+O botão **—** não declara estado: é borracha. Limpa resposta, confiança e
+flags, e devolve o item a não preenchido.
+
+**O app registra a declaração, não a causa.** Por que você ficou sem direção
+num item se lê no caderno, na página da coluna `pag` — não há índice batizando
+isso. As contagens `N`, `T` e `I` saem no bloco e a divisão é de quem analisa.
 
 **T bloqueia a marcação** do item e o torna branco automaticamente. T não é um
 jeito de responder — é a declaração de que você não chegou lá. Sem esse
