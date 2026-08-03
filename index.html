@@ -1773,7 +1773,10 @@ function indices(){
   return {
     C_m:n.C_m, E_m:n.E_m, C_B:n.C_B, E_B:n.E_B, N:n.N, T:n.T,
     itens_nao_preenchidos:n.nao_preenchido,
-    I, anulados:n.anulado, sem_gabarito:n.sem_gabarito, opinou,
+    // n_opinou e não opinou: buildCSV copia X[k] pelo nome da chave do bloco #,
+    // e enquanto os dois nomes divergiram o campo saiu VAZIO em todo export,
+    // ainda que acerto_do_enfrentado — que divide por ele — saísse certo.
+    I, anulados:n.anulado, sem_gabarito:n.sem_gabarito, n_opinou:opinou,
     identidade_fecha: (n.C_m+n.E_m+n.C_B+n.E_B+n.N+n.T+n.nao_preenchido)===I,
     pontos_em_jogo:num1(pontosJogo), pontos:num1(ptsLiq),
     pontos_ignorando_B:num1(ptsComB),

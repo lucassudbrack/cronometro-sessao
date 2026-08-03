@@ -931,6 +931,16 @@ EQ("as primitivas vao no bloco",
    ["C_m", "E_m", "C_B", "E_B", "N", "T", "I"].map(v12), ["1", "1", "1", "1", "1", "1", "6"]);
 EQ("e a identidade e declarada fechada", v12("identidade_fecha"), "1");
 EQ("os indices tambem", [v12("real"), v12("acerto_do_enfrentado")], ["0.0833", "0.5"]);
+// n_opinou saiu vazio em todo export enquanto indices() devolvia a chave como
+// "opinou": o valor era calculado, era usado por acerto_do_enfrentado, e nao
+// era publicado. A bijecao do DIC nao pega isso porque compara CONJUNTOS de
+// chaves, nunca valores — daqui em diante o denominador tem que sair e bater.
+EQ("n_opinou sai preenchido", v12("n_opinou"), "4");
+EQ("e bate com a soma dos quatro estados de opiniao",
+   +v12("n_opinou"), +v12("C_m") + +v12("E_m") + +v12("C_B") + +v12("E_B"));
+EQ("nenhum campo copiado de indices() sai vazio por nome trocado",
+   ["C_m","E_m","C_B","E_B","N","T","I","n_opinou","pontos","pontos_em_jogo",
+    "real","acerto_do_enfrentado"].filter(k => v12(k) === undefined || v12(k) === ""), []);
 EQ("a explicacao do branco mudou para o dicionario",
    [h12.some(l => l.startsWith("# causa_do_branco")),
     /n[aã]o [eé] estado da prova/i.test(buildDic())], [false, true]);
