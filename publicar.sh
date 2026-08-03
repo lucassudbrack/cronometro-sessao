@@ -24,6 +24,18 @@ CONTA=$(gh api user --jq .login)
 # O sw.js serve tudo do cache: sem bump em CACHE o aparelho não vê a versão nova.
 CACHE=$(grep -oE 'const CACHE = "[^"]+"' sw.js | cut -d'"' -f2)
 echo "cache atual do service worker: $CACHE"
+
+# APP_VER é o que sai em gerado_por, dentro de todo CSV exportado. Se ele
+# divergir do CACHE, os arquivos passam a mentir sobre que versão os produziu —
+# e essa ambiguidade já custou uma auditoria inteira do lado que consome.
+# Aqui é erro, não aviso: publicar com os dois em desacordo é publicar um
+# rótulo errado, e o rótulo viaja dentro do dado.
+APP_VER=$(grep -oE 'APP_VER="[^"]+"' index.html | cut -d'"' -f2)
+if [ "$APP_VER" != "${CACHE#sessao-}" ]; then
+  echo "erro: APP_VER=$APP_VER em index.html e CACHE=$CACHE em sw.js divergem."
+  echo "      os dois têm que andar juntos — acerte APP_VER para ${CACHE#sessao-}."
+  exit 1
+fi
 if git rev-parse HEAD~1 >/dev/null 2>&1 &&
    git diff --quiet HEAD~1 HEAD -- sw.js &&
    ! git diff --quiet HEAD~1 HEAD -- index.html; then
@@ -44,6 +56,20 @@ fi
 git remote get-url origin >/dev/null 2>&1 \
   && git remote set-url origin "git@github.com:$DONO/$REPO.git" \
   || git remote add origin "git@github.com:$DONO/$REPO.git"
+
+# APP_COMMIT nomeia o commit do CONTEÚDO que está sendo publicado. O commit do
+# próprio stamp não pode estar dentro do arquivo que ele altera, e é a única
+# coisa que ele altera — então quem for resolver a string usa `git show <sha>`
+# e vê a árvore publicada. O gate de APP_VER acima já rodou, e a checagem de
+# CACHE também, de propósito: nenhum dos dois deve reagir a este commit.
+SHA=$(git rev-parse --short HEAD)
+if [ "$(grep -oE 'APP_COMMIT="[^"]+"' index.html | cut -d'"' -f2)" != "$SHA" ]; then
+  perl -pi -e "s/APP_COMMIT=\"[^\"]+\"/APP_COMMIT=\"$SHA\"/" index.html
+  git add index.html
+  git commit -q -m "gerado_por estampa $SHA" -m \
+    "Só a constante APP_COMMIT. Feito por publicar.sh para que todo CSV exportado nomeie o commit do código que o produziu."
+  echo "gerado_por estampado: app sessao $APP_VER $SHA"
+fi
 
 git push -u origin main
 

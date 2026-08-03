@@ -463,6 +463,25 @@
 
 <script>
 const $ = id => document.getElementById(id);
+
+/* ---------- versão ----------
+   gerado_por sai nos quatro CSVs e é o único jeito de quem recebe um arquivo
+   saber que app o produziu. Até aqui era o literal "app sessao v1", congelado
+   desde o primeiro dia — e por isso duas versões que emitiam CONJUNTOS DE
+   CAMPOS DIFERENTES se declaravam a mesma coisa. Custou uma auditoria inteira
+   do lado consumidor só para datar um CSV por fingerprint de chaves.
+
+   APP_VER anda em lockstep com CACHE em sw.js, e publicar.sh recusa publicar
+   se os dois divergirem: é o token que dá para conferir contra o site vivo com
+   um curl, e é o que o aparelho usa para decidir que há versão nova.
+   APP_COMMIT é estampado por publicar.sh e nomeia o commit do CONTEÚDO
+   publicado — o commit do próprio stamp não pode estar dentro do arquivo que
+   ele altera, e é só isso que ele altera.
+   APP_FMT é o formato do snapshot, e é a mesma constante que snapshot() grava:
+   quem lê o CSV descobre qual migração de retomar() aquele estado atravessou. */
+const APP_VER="v19", APP_COMMIT="e1ea7c7", APP_FMT=5;
+const GERADO_POR="app sessao "+APP_VER+" "+APP_COMMIT+" fmt"+APP_FMT;
+
 const KEY = "sessao:v1";
 const store = (typeof window!=="undefined" && window.storage) ? window.storage : (function(){
   try{ const t="__t"; localStorage.setItem(t,"1"); localStorage.removeItem(t);
@@ -1041,7 +1060,7 @@ function snapshot(){
       vis.sec+=d; t[visit.q]=(t[visit.q]||0)+d;
     }
   }
-  return {fmt:5,nome:nomeBase(),N,goal,limite,travado,cfgA,cfgME,cfgB,usa,pesos,cronometrar,times:t,log,visit:vis,ans,pags,apelidos,ficha,olhar,gab,gabAberto,events,
+  return {fmt:APP_FMT,nome:nomeBase(),N,goal,limite,travado,cfgA,cfgME,cfgB,usa,pesos,cronometrar,times:t,log,visit:vis,ans,pags,apelidos,ficha,olhar,gab,gabAberto,events,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -1520,7 +1539,7 @@ $("identEdit").onclick=abreEdicao;
    [chave, o que quer dizer, como é calculado]                                */
 const DIC={
 sessao:[
-["gerado_por","Versão do app que gerou os arquivos.","fixo"],
+["gerado_por","Que app produziu o arquivo, em três partes: a versão publicada (anda junto com o cache do service worker), o commit do código, e o formato do snapshot. Sai igual nos quatro arquivos e é o único jeito de datar uma linha.","APP_VER, APP_COMMIT e APP_FMT, constantes do fonte; publicar.sh estampa o commit e recusa publicar se a versão divergir do cache"],
 ["exportado_em","Quando o arquivo foi baixado. Não é quando a sessão aconteceu.","relógio no momento do export"],
 ["sessao","Nome canônico da sessão. Serve de nome de arquivo e de apelido na lista de sessões guardadas.","data + concurso + matéria + subtópico + tipo_sessao + fonte, minúsculo, sem acento, unidos por underline"],
 ["data","Data da sessão, informada por você no setup.","digitado"],
@@ -1840,7 +1859,7 @@ const somaEst = (E,f) => E.filter(f).reduce((s,r)=>s+r.itens,0);
 function buildEstat(){
   invalidaPags();
   const E=estatTidy(), L=[];
-  L.push("# gerado_por,app sessao v1");
+  L.push("# gerado_por,"+GERADO_POR);
   L.push("# sessao,"+csvv(nomeBase()));
   L.push("# exportado_em,"+iso(Date.now()));
   L.push("# grao,"+csvv("um registro por combinação de tipo, confiança e flags; combinação ausente = zero"));
@@ -1878,7 +1897,7 @@ function buildCSV(){
   const eixo = v => v===0 ? "na hora" : v;
   const base=nomeBase();
 
-  V.gerado_por="app sessao v1";
+  V.gerado_por=GERADO_POR;
   V.exportado_em=iso(Date.now());
   V.sessao=base;
   V.data=ficha.data; V.concurso=ficha.concurso; V.materia=ficha.mat;
@@ -1977,7 +1996,7 @@ function buildEventos(){
                   .sort((a,b)=> a.t<b.t?-1 : a.t>b.t?1 : 0);
   const t0 = linhas.length ? Date.parse(linhas[0].t) : 0;
   const L=[];
-  L.push("# gerado_por,app sessao v1");
+  L.push("# gerado_por,"+GERADO_POR);
   L.push("# sessao,"+csvv(nomeBase()));
   L.push("# exportado_em,"+iso(Date.now()));
   L.push("# grao,"+csvv("um evento por linha, em ordem cronológica"));
@@ -2007,7 +2026,7 @@ function buildEventos(){
 // os outros três arquivos guardam procedência e grão, e nada mais.
 function buildDic(){
   const L=[];
-  L.push("# gerado_por,app sessao v1");
+  L.push("# gerado_por,"+GERADO_POR);
   L.push("# sessao,"+csvv(nomeBase()));
   L.push("# exportado_em,"+iso(Date.now()));
   L.push("# grao,"+csvv("uma linha por campo emitido nos outros três arquivos"));

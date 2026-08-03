@@ -1313,6 +1313,27 @@ EQ("e o bloco nomeia o dicionario com o mesmo prefixo",
    v17("dicionario_em"), ultArq.replace(/\.csv$/, "_dicionario.csv"));
 EQ("o dicionario tem conteudo", buildDic().length > 4000, true);
 
+/* ---- cenário 18: gerado_por data o arquivo ----
+   Era o literal "app sessao v1" nos quatro emissores, congelado enquanto o
+   conjunto de campos mudava embaixo dele — duas versões incompatíveis se
+   declaravam iguais. Agora nomeia versão, commit e formato do snapshot, e as
+   quatro saídas têm que concordar: um emissor que ficasse para trás recriaria
+   exatamente a ambiguidade que isto veio resolver. */
+const gp = s => (s.split(String.fromCharCode(10))
+  .find(l => l.startsWith("# gerado_por,")) || "").slice(13);
+EQ("os quatro arquivos declaram a mesma versao",
+   [gp(buildEstat()), gp(buildEventos()), gp(buildDic())].filter(v => v !== gp(buildCSV())), []);
+EQ("e o bloco # do CSV principal tambem",
+   gp(buildCSV()), GERADO_POR);
+EQ("o formato e versao, commit e fmt",
+   /^app sessao v[0-9]+ [0-9a-f]{7,} fmt[0-9]+$/.test(GERADO_POR), true);
+EQ("o fmt declarado e o mesmo que o snapshot grava",
+   "fmt" + snapshot().fmt, GERADO_POR.split(" ").pop());
+EQ("nao sobrou nenhum literal congelado",
+   [buildCSV(), buildEstat(), buildEventos(), buildDic()]
+     .filter(s => s.indexOf("app sessao v1,") >= 0 || /gerado_por,app sessao v1$/m.test(s)), []);
+
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +
   [...new Set(events.map(e => e.ev))].join(" "));
+P("gerado_por: " + GERADO_POR);
