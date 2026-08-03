@@ -1045,7 +1045,7 @@ function snapshot(){
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
-let st=null, storeOK=true;
+let st=null, storeOK=true, _metaCalc=[];
 function flagStore(ok){
   if(ok===storeOK) return;
   storeOK=ok;
@@ -1512,6 +1512,179 @@ function abreEdicao(){
 }
 $("identEdit").onclick=abreEdicao;
 
+/* ---------- dicionário ----------
+   Fonte única da verdade do export. O CSV principal lê daqui a ORDEM e o
+   CONJUNTO de chaves do bloco de metadados; o dicionário lê o texto. Um campo
+   calculado sem entrada aqui, ou uma entrada aqui que ninguém calcula, quebra
+   a suíte — é isso que impede o dicionário de virar documentação velha.
+   [chave, o que quer dizer, como é calculado]                                */
+const DIC={
+sessao:[
+["gerado_por","Versão do app que gerou os arquivos.","fixo"],
+["exportado_em","Quando o arquivo foi baixado. Não é quando a sessão aconteceu.","relógio no momento do export"],
+["sessao","Nome canônico da sessão. Serve de nome de arquivo e de apelido na lista de sessões guardadas.","data + concurso + matéria + subtópico + tipo_sessao + fonte, minúsculo, sem acento, unidos por underline"],
+["data","Data da sessão, informada por você no setup.","digitado"],
+["concurso","Concurso a que a sessão se refere.","digitado"],
+["materia","Matéria.","digitado"],
+["subtopico","Subtópico.","digitado"],
+["fonte","De onde vieram as questões.","digitado"],
+["tipo_sessao","prova, teste ou aprendizado. É o que decide se a sessão corre no relógio.","escolhido no setup"],
+["cronometrada","1 quando o cronômetro correu. Em aprendizado sai 0 e as colunas de tempo saem vazias.","1 se tipo_sessao é prova ou teste"],
+["questoes_no_set","Quantas questões a sessão teve.","contagem"],
+["itens_no_set","Total de itens declarados. Uma questão de C/E com 5 itens conta 5.","soma dos itens de cada questão com tipo e formato declarados"],
+["gabarito_completo","1 quando todo item tem chave preenchida. Item sem chave fica fora de I e de todos os índices.","1 se itens_sem_gabarito é zero"],
+["ce_itens","Itens por questão de certo/errado fixados no setup. Sai 'na hora' quando o eixo ficou em aberto.","escolhido no setup"],
+["me_alternativas","Alternativas por questão de múltipla escolha fixadas no setup.","escolhido no setup"],
+["conta_digitos","Dígitos da resposta das questões de conta fixados no setup.","escolhido no setup"],
+["duracao_total","Tempo com o cronômetro correndo, em mm:ss. Pausa não entra.","soma do tempo de todas as passadas"],
+["duracao_total_seg","O mesmo em segundos inteiros.","arredondamento da soma das passadas"],
+["tempo_de_prova","Limite de tempo declarado no setup, em mm:ss. Ao esgotar, o app trava a folha.","digitado"],
+["tempo_de_prova_seg","O mesmo em segundos inteiros.","minutos digitados vezes 60"],
+["tempo_esgotou","1 quando o limite chegou ao fim durante a sessão e a folha travou.","1 se o app travou por tempo"],
+["tempo_sobrou","Quanto do tempo de prova não foi usado, em mm:ss. Vazio se o tempo esgotou.","tempo_de_prova menos duracao_total"],
+["tempo_sobrou_seg","O mesmo em segundos inteiros.","idem"],
+["n_pausas","Quantas vezes você parou e voltou. Pausa sem retomada é o fim da sessão e não entra.","pares pause -> resume no log de eventos"],
+["tempo_em_pausa_seg","Tempo total com o cronômetro parado dentro da sessão.","soma dos intervalos pause -> resume em relógio de parede"],
+["olhar","Questões cujo desenvolvimento você quer revisar. Marcado antes de ver o gabarito.","lista das questões marcadas no fechamento"],
+["gabarito_visto_em","Instante em que você abriu a folha do gabarito pela primeira vez. É a linha que separa escolha limpa de escolha já contaminada.","relógio na primeira abertura"],
+["itens_conferem","Itens em que a resposta bate com a chave.","C_m + C_B"],
+["itens_divergem","Itens em que a resposta não bate.","E_m + E_B"],
+["itens_em_branco","Itens sem resposta que foram declarados como branco ou como não alcançado.","N + T"],
+["itens_anulados","Itens que a banca anulou.","contagem dos itens com gabarito X"],
+["acertos_certeza","Acertos entre os itens marcados com certeza.","contagem"],
+["erros_certeza","Erros entre os itens marcados com certeza.","contagem"],
+["acertos_duvida","Acertos entre os marcados com dúvida.","contagem"],
+["erros_duvida","Erros entre os marcados com dúvida.","contagem"],
+["acertos_chute","Acertos entre os marcados com chute.","contagem"],
+["erros_chute","Erros entre os marcados com chute.","contagem"],
+["A_acertos","Acertos em questões de certo/errado.","contagem por tipo"],
+["A_erros","Erros em certo/errado.","contagem por tipo"],
+["A_brancos","Brancos em certo/errado.","contagem por tipo"],
+["ME_acertos","Acertos em múltipla escolha.","contagem por tipo"],
+["ME_erros","Erros em múltipla escolha.","contagem por tipo"],
+["ME_brancos","Brancos em múltipla escolha.","contagem por tipo"],
+["B_acertos","Acertos em questões de conta.","contagem por tipo"],
+["B_erros","Erros em conta.","contagem por tipo"],
+["B_brancos","Brancos em conta.","contagem por tipo"],
+["n_opinou","Itens em que você teve opinião: respondeu, com ou sem a flag B.","C_m + E_m + C_B + E_B"],
+["C_m","Itens que você marcou e acertou. Não inclui os marcados com B.","contagem sobre os itens"],
+["E_m","Itens que você marcou e errou. Não inclui os marcados com B.","contagem sobre os itens"],
+["C_B","Itens em que você declarou que deixaria em branco na prova real e o palpite acertou.","contagem sobre os itens"],
+["E_B","Itens em que você declarou que deixaria em branco e o palpite errou.","contagem sobre os itens"],
+["N","Itens em branco com a flag B: enfrentei e não tenho nem direção.","contagem sobre os itens"],
+["T","Itens marcados com T declarando que você não alcançou por tempo. T zera a marcação e vira branco.","contagem sobre os itens"],
+["itens_nao_preenchidos","Itens sem resposta e sem flag nenhuma. Não é estado da prova: é lacuna de preenchimento, e em sessão fechada tem que ser zero.","contagem sobre os itens"],
+["I","Itens válidos. É o denominador de quase tudo. Anulado e item sem gabarito ficam fora.","C_m + E_m + C_B + E_B + N + T + itens_nao_preenchidos"],
+["identidade_fecha","Auditoria. Se der 0 existe item que não caiu em nenhum dos estados.","verifica se a soma dos estados é igual a I"],
+["itens_anulados_fora","Itens anulados, que saem do numerador e do denominador.","contagem"],
+["itens_sem_gabarito","Itens cuja chave você ainda não preencheu. Ficam fora de todos os índices.","contagem"],
+["pontos","Pontuação líquida em múltiplos de X. Item marcado com B rende 0 e tira 0.","soma dos acertos vezes peso_acerto mais os erros vezes peso_erro, só sobre C_m e E_m"],
+["pontos_em_jogo","Total de X disponível nos itens válidos. Branco continua contando: o ponto existia e você não o pegou.","soma de peso_acerto sobre os I itens"],
+["pontos_ignorando_B","Quanto você teria feito se os itens marcados com B tivessem sido submetidos.","o mesmo cálculo contando C_B e E_B"],
+["real","Métrica master. Quanto do X em jogo você fez. Normalizada contra a prova e não contra o que você enfrentou.","pontos dividido por pontos_em_jogo"],
+["acerto_do_enfrentado","Taxa de acerto entre os itens em que você teve opinião. Branco e T ficam fora do denominador.","(C_m + C_B) dividido por n_opinou"],
+["branco_por_disciplina","Proporção da prova em que você declarou que deixaria em branco.","(C_B + E_B) dividido por I"],
+["valor_do_branco","Se a disciplina de deixar em branco pagou, em contagem de itens. Positivo significa que você evitou mais erros do que abriu mão de acertos.","(E_B menos C_B) dividido por I"],
+["valor_do_branco_pontos","O mesmo em pontos. Quando o erro não pune, a versão em contagem engana.","(X evitado nos E_B menos X aberto mão nos C_B) dividido por pontos_em_jogo"],
+["acerto_certeza","Quando você marcou certeza, quantas vezes acertou.","acertos entre os itens marcados c dividido pelo total marcado c"],
+["n_certeza","Quantos itens estão por trás de acerto_certeza.","contagem"],
+["acerto_duvida","Quando você marcou dúvida, quantas vezes acertou.","acertos entre os ? dividido pelo total de ?"],
+["n_duvida","Quantos itens estão por trás de acerto_duvida.","contagem"],
+["acerto_chute","Quando você marcou chute, quantas vezes acertou. Vazio quando não houve chute.","acertos entre os x dividido pelo total de x"],
+["n_chute","Quantos itens estão por trás de acerto_chute.","contagem"],
+["acerto_B_palpite","Entre os itens que você deixaria em branco, quantos o palpite teria acertado.","C_B dividido por (C_B + E_B)"],
+["n_B_palpite","Quantos itens estão por trás de acerto_B_palpite.","contagem"],
+["bruto_ponderado","Taxa de acerto em pontos sem a punição do erro. A distância entre ele e real é o preço dos seus erros.","pontos só dos acertos dividido por pontos_em_jogo"],
+["real_ignorando_B","O real se os itens marcados com B contassem. Igual ao real quando não houve B.","pontos_ignorando_B dividido por pontos_em_jogo"],
+["min_por_questao","Média de minutos por questão. Mistura questão de 5 itens com questão de 1 item.","duracao_total dividido por 60 e pelo número de questões com tempo"],
+["passadas_truncadas","Passadas cujo tempo foi cortado por crash. O valor delas é piso medido e não medida completa.","contagem"],
+["pct_passadas_truncadas","Proporção das passadas que ficaram truncadas.","truncadas dividido pelo total de passadas"],
+["peso_A_acerto","Quanto vale acertar um item de certo/errado, em múltiplos de X. Vazio quando a prova não tem o tipo.","declarado no setup"],
+["peso_A_erro","Quanto custa errar um item de certo/errado.","declarado no setup"],
+["peso_ME_acerto","Quanto vale acertar uma questão de múltipla escolha.","declarado no setup"],
+["peso_ME_erro","Quanto custa errar uma múltipla escolha.","declarado no setup"],
+["peso_B_acerto","Quanto vale acertar uma questão de conta.","declarado no setup"],
+["peso_B_erro","Quanto custa errar uma conta.","declarado no setup"],
+["tipos_na_prova","Quais tipos de questão esta prova tem. O que não está aqui não aparece na hora de declarar o tipo.","marcado no setup"],
+["modelo","Template de prova aplicado no setup, que preenche eixos e pesos de uma vez.","escolhido no setup"],
+["estatisticas_completas_em","Nome do arquivo irmão com a tabela de estatísticas.","nome da sessão mais sufixo"],
+["eventos_completos_em","Nome do arquivo irmão com o log de eventos.","nome da sessão mais sufixo"],
+["dicionario_em","Nome deste dicionário.","nome da sessão mais sufixo"]
+],
+questao:[
+["q","Ordem da questão na sessão.","posição"],
+["apelido","Nome da questão. Serve para set montado de provas diferentes.","apelido digitado; sem apelido, a página a que a questão se refere"],
+["tipo","Tipo da questão: A certo/errado, ME múltipla, B conta.","declarado ao abrir a questão"],
+["param","Nº de itens em A, de alternativas em ME, de dígitos em B.","fixado no setup ou declarado na questão"],
+["itens","Um token por item: letra da resposta, letra da confiança, B se deixaria em branco, T se não alcançou. -B é branco com B, -T é não alcancei, vazio é não preenchido.","montado a partir das marcações"],
+["numerica","Resposta das questões de conta. Vazio nos outros tipos.","digitado no teclado numérico"],
+["segundos","Tempo total na questão somando todas as passadas.","soma das passadas dela"],
+["mmss","O mesmo tempo formatado.","formatação de segundos"],
+["passadas","Quantas vezes você entrou nesta questão. Duas passadas significam tempo fragmentado.","contagem"],
+["pag","Página do caderno com o desenvolvimento manuscrito. Aceita intervalo como 7-8.","digitado; sem digitar, deduzido em cascata da ordem, e digitar uma página re-ancora as seguintes"],
+["olhar","1 quando você marcou a questão para revisar depois.","marcado no fechamento, antes do gabarito"],
+["gabarito","Chave de cada item na mesma ordem da coluna itens. X é anulada e vazio é sem gabarito.","digitado na folha do gabarito"],
+["pontos","Pontos líquidos desta questão. Vazio quando ela não tem gabarito.","soma dos pesos dos itens dela, contando só C_m e E_m"],
+["pontos_em_jogo_q","Peso de acerto somado sobre os itens válidos desta questão.","o pontos_em_jogo recortado por questão; anulado e sem gabarito ficam fora"]
+],
+estat:[
+["tipo","Tipo do item: A certo/errado, ME múltipla, B conta.","do tipo declarado na questão"],
+["confianca","Confiança declarada: c certeza, ? dúvida, x chute, - sem resposta.","da marcação"],
+["sem_tempo","1 quando o item foi marcado com T.","da flag T"],
+["deixaria_branco","1 quando o item foi marcado com B.","da flag B"],
+["resultado","acerto, erro, branco, anulado ou sem_gabarito.","resposta comparada com a chave"],
+["estado","Qual dos estados o item ocupa: C_m E_m C_B E_B N T nao_preenchido. São mutuamente exclusivos e somam I.","função do resultado e das flags"],
+["itens","Quantos itens caem exatamente nessa combinação das colunas acima.","contagem"],
+["pontos","Quantos pontos essa combinação rendeu. Branco, anulado e sem gabarito valem 0.","itens vezes o peso do resultado naquele tipo, só em C_m e E_m"]
+],
+evento:[
+["n","Número sequencial da linha.","posição"],
+["t","Relógio de parede do evento em ISO 8601 UTC. Não é o cronômetro.","carimbado no toque"],
+["hora","O mesmo instante em hora local.","formatação de t"],
+["ms","Milissegundos desde o primeiro evento da sessão.","t menos o t do primeiro evento"],
+["ev","Tipo do evento. A lista está no bloco tipos_de_evento deste dicionário.",""],
+["q","Questão a que o evento se refere.",""],
+["item","Item dentro da questão, quando o evento é por item.",""],
+["passada","Em enter é o número da passada naquela questão; em passada é a ordem da passada na sessão.",""],
+["seg","Duração em segundos. Aparece em passada e em leave.","tempo medido"],
+["resp","Resposta marcada naquele toque.",""],
+["conf","Confiança marcada naquele toque.",""],
+["flag","Qual flag foi tocada: B ou T.",""],
+["on","1 quando a flag foi ligada, 0 quando desligada.",""],
+["tipo","Tipo de questão escolhido naquele evento.",""],
+["campo","Qual campo da identificação mudou.",""],
+["valor","Valor do evento. Polimórfico: dígito, letra do gabarito, página, apelido, valor do campo.",""],
+["rev","1 quando o evento aconteceu na conferência, depois do relógio.",""],
+["pos_gabarito","1 quando o evento aconteceu depois de você abrir o gabarito.",""],
+["extra","Campos sem coluna própria, escritos como chave=valor. Objeto sai em JSON.",""]
+],
+tipos_evento:[
+["start","Abertura da sessão. O extra carrega toda a configuração: questões, tempo de prova, eixos, modelo, pesos.",""],
+["passada","Uma visita fechada a uma questão, com a duração. A última passada aberta também aparece.",""],
+["enter","Você entrou na questão. Carrega o número da passada.",""],
+["leave","Você saiu da questão. Carrega a duração daquela passada.",""],
+["pause","Cronômetro parado.",""],
+["resume","Cronômetro religado.",""],
+["tipo","Tipo da questão declarado. auto=true quando a prova tem um tipo só e o app atribuiu.",""],
+["param","Nº de itens, alternativas ou dígitos declarado para aquela questão.",""],
+["mark","Resposta e confiança marcadas num item.",""],
+["conf","Confiança marcada numa questão de conta.",""],
+["flag","Flag B ou T ligada ou desligada. zerou=true significa que o T apagou a marcação.",""],
+["limpa","Borracha: apagou resposta, confiança e flags do item.",""],
+["digit","Dígito digitado numa questão de conta.",""],
+["digit_del","Dígito apagado numa questão de conta.",""],
+["pag","Página do caderno informada.",""],
+["apelido","Apelido da questão alterado.",""],
+["ficha","Campo de identificação alterado.",""],
+["peso","Peso de acerto ou erro alterado.",""],
+["olhar","Questão marcada ou desmarcada para revisar depois.",""],
+["gabarito_aberto","Instante em que você abriu a folha do gabarito pela primeira vez.",""],
+["gab","Uma chave do gabarito preenchida. Valor vazio significa que você desmarcou.",""],
+["tempo_esgotado","O limite de tempo de prova acabou e a folha travou.",""],
+["recover","Sessão retomada após crash. Carrega o tempo medido até o último registro.",""]
+]
+};
+
 /* ---------- export ---------- */
 const csvv = s => { s=String(s==null?"":s); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
 const olharList = () => Object.keys(olhar).filter(q=>olhar[q]).map(Number).sort((a,b)=>a-b);
@@ -1668,13 +1841,6 @@ function buildEstat(){
   L.push("# sessao,"+csvv(nomeBase()));
   L.push("# exportado_em,"+iso(Date.now()));
   L.push("# grao,"+csvv("um registro por combinação de tipo, confiança e flags; combinação ausente = zero"));
-  L.push("# tipo,"+csvv("A = certo/errado · ME = múltipla · B = conta"));
-  L.push("# confianca,"+csvv("c certeza · ? dúvida · x chute · - sem resposta"));
-  L.push("# sem_tempo,"+csvv("1 = item marcado com T, não tive tempo de pensar"));
-  L.push("# deixaria_branco,"+csvv("1 = item marcado com B, deixaria em branco na prova real"));
-  L.push("# resultado,"+csvv("acerto | erro | branco | anulado | sem_gabarito"));
-  L.push("# col.pontos,"+csvv("itens × peso do resultado; branco, anulado e sem gabarito valem 0"));
-  L.push("# col.estado,"+csvv("C_m E_m C_B E_B N T nao_preenchido · os estados que somam I"));
   L.push("tipo,confianca,sem_tempo,deixaria_branco,resultado,estado,itens,pontos");
   E.forEach(r=>{
     const p = r.resultado==="acerto" ? pesos[r.tipo].acerto
@@ -1700,102 +1866,76 @@ function itemStr(it){
 }
 function buildCSV(){
   invalidaPags(); commit(); if(running) segStart=now();
-  // Bloco de metadados só em linhas de comentário. Antes havia um cabeçalho
-  // "chave,valor" falso antes delas e o arquivo tinha dois headers — nenhum
-  // parser lia isso direto, e o destino do CSV é justamente ser lido por máquina.
-  const L=[];
-  L.push("# gerado_por,app sessao v1");
-  L.push("# exportado_em,"+iso(Date.now()));
-  L.push("# sessao,"+csvv(nomeBase()));
-  L.push("# data,"+csvv(ficha.data));
-  L.push("# concurso,"+csvv(ficha.concurso));
-  L.push("# materia,"+csvv(ficha.mat));
-  L.push("# subtopico,"+csvv(ficha.sub));
-  L.push("# fonte,"+csvv(ficha.fonte));
-  L.push("# tipo_sessao,"+csvv(ficha.tipo));
-  L.push("# cronometrada,"+(cronometrar?1:0));
-  const X=indices();
-  L.push("# questoes_no_set,"+N);
-  // itens_no_set é o total declarado; I sai dele tirando anulado e sem gabarito.
-  // Antes saía itens_julgaveis_no_set, que contava item sem gabarito e divergia
-  // de I sem dizer por quê — nesta sessão a diferença foi de 5 itens.
-  L.push("# itens_no_set,"+itensNoSet());
-  L.push("# gabarito_completo,"+(X.sem_gabarito?0:1));
-  const eixo = v => v===0 ? "na hora" : v;
-  L.push("# ce_itens,"+eixo(cfgA));
-  L.push("# me_alternativas,"+eixo(cfgME));
-  L.push("# conta_digitos,"+eixo(cfgB));
-  L.push("# duracao_total,"+(cronometrar?fmt(sessionLive()):""));
-  L.push("# duracao_total_seg,"+(cronometrar?Math.round(sessionLive()):""));
-  L.push("# tempo_de_prova,"+(limite?fmt(limite):""));
-  L.push("# tempo_de_prova_seg,"+(limite||""));
-  L.push("# tempo_esgotou,"+(limite?(travado?1:0):""));
-  L.push("# tempo_sobrou,"+(limite&&!travado?fmt(restante()):""));
-  L.push("# tempo_sobrou_seg,"+(limite&&!travado?Math.round(restante()):""));
-  /* ---- 2) pausas ---- */
-  const pz=pausas();
-  L.push("# n_pausas,"+(cronometrar?pz.n:""));
-  L.push("# tempo_em_pausa_seg,"+(cronometrar?pz.seg:""));
-  L.push("# olhar,"+csvv(olharList().join(" ")));
-  L.push("# col.param,"+csvv("tipo A: nº de itens · ME: nº de alternativas · B: nº de dígitos"));
-  L.push("# col.gabarito,"+csvv("mesmo alfabeto de itens · X = anulada · vazio = sem gabarito"));
-  const tl=tally();
-  L.push("# gabarito_visto_em,"+(gabAberto||""));
-  L.push("# itens_conferem,"+tl.ok);
-  L.push("# itens_divergem,"+tl.erro);
-  L.push("# itens_em_branco,"+tl.branco);
-  L.push("# itens_anulados,"+tl.anulado);
-  const E=estatTidy(), sm=f=>somaEst(E,f);
+  // Os valores vão para V; a ORDEM e o CONJUNTO de chaves saem do DIC. Chave
+  // calculada sem entrada no dicionário é descartada aqui e a suíte reprova —
+  // é o que impede o dicionário de virar documentação velha.
+  const V={}, X=indices(), tl=tally(), pz=pausas(), E=estatTidy();
+  const sm=f=>somaEst(E,f);
   const acerto = r=>r.resultado==="acerto", erro = r=>r.resultado==="erro";
+  const eixo = v => v===0 ? "na hora" : v;
+  const base=nomeBase();
+
+  V.gerado_por="app sessao v1";
+  V.exportado_em=iso(Date.now());
+  V.sessao=base;
+  V.data=ficha.data; V.concurso=ficha.concurso; V.materia=ficha.mat;
+  V.subtopico=ficha.sub; V.fonte=ficha.fonte; V.tipo_sessao=ficha.tipo;
+  V.cronometrada=cronometrar?1:0;
+  V.questoes_no_set=N;
+  V.itens_no_set=itensNoSet();
+  V.gabarito_completo=X.sem_gabarito?0:1;
+  V.ce_itens=eixo(cfgA); V.me_alternativas=eixo(cfgME); V.conta_digitos=eixo(cfgB);
+  V.duracao_total=cronometrar?fmt(sessionLive()):"";
+  V.duracao_total_seg=cronometrar?Math.round(sessionLive()):"";
+  V.tempo_de_prova=limite?fmt(limite):"";
+  V.tempo_de_prova_seg=limite||"";
+  V.tempo_esgotou=limite?(travado?1:0):"";
+  V.tempo_sobrou=(limite&&!travado)?fmt(restante()):"";
+  V.tempo_sobrou_seg=(limite&&!travado)?Math.round(restante()):"";
+  V.n_pausas=cronometrar?pz.n:"";
+  V.tempo_em_pausa_seg=cronometrar?pz.seg:"";
+  V.olhar=olharList().join(" ");
+  V.gabarito_visto_em=gabAberto||"";
+  V.itens_conferem=tl.ok; V.itens_divergem=tl.erro;
+  V.itens_em_branco=tl.branco; V.itens_anulados=tl.anulado;
   [["c","certeza"],["?","duvida"],["x","chute"]].forEach(([k,nome])=>{
-    L.push("# acertos_"+nome+","+sm(r=>acerto(r)&&r.confianca===k));
-    L.push("# erros_"+nome+","+sm(r=>erro(r)&&r.confianca===k));
+    V["acertos_"+nome]=sm(r=>acerto(r)&&r.confianca===k);
+    V["erros_"+nome]=sm(r=>erro(r)&&r.confianca===k);
   });
   ["A","ME","B"].forEach(tp=>{
-    L.push("# "+tp+"_acertos,"+sm(r=>acerto(r)&&r.tipo===tp));
-    L.push("# "+tp+"_erros,"+sm(r=>erro(r)&&r.tipo===tp));
-    L.push("# "+tp+"_brancos,"+sm(r=>r.resultado==="branco"&&r.tipo===tp));
+    V[tp+"_acertos"]=sm(r=>acerto(r)&&r.tipo===tp);
+    V[tp+"_erros"]=sm(r=>erro(r)&&r.tipo===tp);
+    V[tp+"_brancos"]=sm(r=>r.resultado==="branco"&&r.tipo===tp);
   });
-  // sem_tempo_* deixou de ser emitido: desde que T força branco, os acertos e
-  // erros são sempre 0 e o total é sempre igual à primitiva T.
-  L.push("# n_opinou,"+X.opinou);
-  L.push("# glossario,"+csvv("toda taxa tem o seu n ao lado; 0 com n=1 não é 0 com n=50 · real = líquido normalizado contra a prova · item com B rende 0 e tira 0 mas fica no denominador"));
-  L.push("# causa_do_branco,"+csvv("o app registra a declaração, não a causa. N = branco com B, enfrentei e não tenho direção. T = você tocou T, não alcancei. itens_nao_preenchidos = ficou sem resposta e sem flag, o que é lacuna de preenchimento e não estado da prova. A causa de um branco se lê no caderno, na página da coluna pag"));
-  L.push("# identidade,"+csvv("C_m+E_m+C_B+E_B+N+T+itens_nao_preenchidos = I"));
-  ["C_m","E_m","C_B","E_B","N","T","itens_nao_preenchidos","I"].forEach(k=>L.push("# "+k+","+X[k]));
-  L.push("# identidade_fecha,"+(X.identidade_fecha?1:0));
-  L.push("# itens_anulados_fora,"+X.anulados);
-  L.push("# itens_sem_gabarito,"+X.sem_gabarito);
-  L.push("# pontos,"+X.pontos);
-  L.push("# pontos_em_jogo,"+X.pontos_em_jogo);
-  L.push("# pontos_ignorando_B,"+X.pontos_ignorando_B);
-  [["real","projeção de nota, tendência"],
-   ["acerto_do_enfrentado","onde meu modelo falha"],
-   ["branco_por_disciplina","política de branco"],
-   ["valor_do_branco","a disciplina de branco me paga"],
-   ["valor_do_branco_pontos","o mesmo, em pontos — com erro valendo 0 a versão em contagem engana"],
-   ["acerto_certeza","política de chute"], ["n_certeza","denominador do índice acima"],
-   ["acerto_duvida","política de chute"],  ["n_duvida","denominador do índice acima"],
-   ["acerto_chute","política de chute"],   ["n_chute","denominador do índice acima"],
-   ["acerto_B_palpite","política de chute"], ["n_B_palpite","denominador do índice acima"],
-   ["bruto_ponderado","acerto sem a punição do erro"],
-   ["real_ignorando_B","referência: se os B contassem"]]
-   .forEach(([k])=>L.push("# "+k+","+(X[k]===null?"":X[k])));
-  L.push("# min_por_questao,"+(cronometrar&&X.I ? num1(sessionLive()/60/Math.max(1,Object.keys(times).length)) : ""));
+  ["n_opinou","C_m","E_m","C_B","E_B","N","T","itens_nao_preenchidos","I",
+   "pontos","pontos_em_jogo","pontos_ignorando_B","real","acerto_do_enfrentado",
+   "branco_por_disciplina","valor_do_branco","valor_do_branco_pontos",
+   "acerto_certeza","n_certeza","acerto_duvida","n_duvida","acerto_chute","n_chute",
+   "acerto_B_palpite","n_B_palpite","bruto_ponderado","real_ignorando_B"]
+   .forEach(k=>V[k]=X[k]===null||X[k]===undefined?"":X[k]);
+  V.identidade_fecha=X.identidade_fecha?1:0;
+  V.itens_anulados_fora=X.anulados;
+  V.itens_sem_gabarito=X.sem_gabarito;
+  V.min_por_questao=(cronometrar&&X.I) ? num1(sessionLive()/60/Math.max(1,Object.keys(times).length)) : "";
   const trunc=log.filter(v=>v.trunc).length;
-  L.push("# passadas_truncadas,"+trunc);
-  L.push("# pct_passadas_truncadas,"+(log.length?Math.round(trunc/log.length*10000)/10000:0));
-  ["A","ME","B"].forEach(tp=>{ if(!usa[tp]) return;
-    L.push("# peso_"+tp+"_acerto,"+pesos[tp].acerto);
-    L.push("# peso_"+tp+"_erro,"+pesos[tp].erro); });
-  L.push("# tipos_na_prova,"+csvv(["A","ME","B"].filter(k=>usa[k]).join(" ")));
-  L.push("# modelo,"+csvv(ficha.template||"livre"));
-  L.push("# estatisticas_completas_em,"+csvv(nomeBase()+"_estatisticas.csv"));
-  L.push("# eventos_completos_em,"+csvv(nomeBase()+"_eventos.csv"));
+  V.passadas_truncadas=trunc;
+  V.pct_passadas_truncadas=log.length?Math.round(trunc/log.length*10000)/10000:0;
+  // Peso sempre com as seis chaves, vazias quando a prova não tem o tipo: o
+  // conjunto de colunas do bloco não pode variar de sessão para sessão.
+  ["A","ME","B"].forEach(tp=>{
+    V["peso_"+tp+"_acerto"]=usa[tp]?pesos[tp].acerto:"";
+    V["peso_"+tp+"_erro"]  =usa[tp]?pesos[tp].erro:"";
+  });
+  V.tipos_na_prova=["A","ME","B"].filter(k=>usa[k]).join(" ");
+  V.modelo=ficha.template||"livre";
+  V.estatisticas_completas_em=base+"_estatisticas.csv";
+  V.eventos_completos_em=base+"_eventos.csv";
+  V.dicionario_em=base+"_dicionario.csv";
+
+  _metaCalc=Object.keys(V);                 // a suíte compara com o DIC
+  const L=[];
+  DIC.sessao.forEach(([k])=>L.push("# "+k+","+csvv(V[k]===undefined||V[k]===null?"":String(V[k]))));
   const ef=pagsEfetivas();
-  L.push("# col.apelido,"+csvv("nome da questao; sem apelido, e a pagina a que ela se refere"));
-  L.push("# col.pontos,"+csvv("pontos = líquido da questão · pontos_em_jogo_q = peso de acerto somado sobre os itens válidos dela"));
-  L.push("# col.itens,"+csvv("um token por item · -B = em branco com B, sem direção · -T = não alcancei por tempo · vazio = não preenchido"));
   L.push("q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito,pontos,pontos_em_jogo_q");
   for(let q=1;q<=N;q++){
     const a=ans[q]; const t=times[q]||0;
@@ -1838,10 +1978,6 @@ function buildEventos(){
   L.push("# sessao,"+csvv(nomeBase()));
   L.push("# exportado_em,"+iso(Date.now()));
   L.push("# grao,"+csvv("um evento por linha, em ordem cronológica"));
-  L.push("# t,"+csvv("relógio de parede em ISO 8601 UTC · hora é o mesmo em local · ms conta do primeiro evento"));
-  L.push("# ev,"+csvv("start passada enter leave pause resume tipo param mark conf flag digit digit_del pag apelido ficha olhar gab gabarito_aberto recover"));
-  L.push("# rev,"+csvv("1 = feito na conferência, depois do relógio"));
-  L.push("# extra,"+csvv("campos sem coluna própria, como chave=valor"));
   L.push(EVCOLS.join(","));
   linhas.forEach((o,i)=>{
     const c={n:i+1, t:o.t, hora:hhmm(o.t), ms:Math.max(0,Date.parse(o.t)-t0)};
@@ -1862,6 +1998,25 @@ function buildEventos(){
   return L.join("\n");
 }
 
+// O dicionário sai do mesmo DIC que dita as chaves do CSV. Não há como ele
+// descrever campo que não é emitido, nem o CSV emitir campo sem descrição:
+// a suíte compara os dois conjuntos. Documentação por campo mora só aqui —
+// os outros três arquivos guardam procedência e grão, e nada mais.
+function buildDic(){
+  const L=[];
+  L.push("# gerado_por,app sessao v1");
+  L.push("# sessao,"+csvv(nomeBase()));
+  L.push("# exportado_em,"+iso(Date.now()));
+  L.push("# grao,"+csvv("uma linha por campo emitido nos outros três arquivos"));
+  L.push("# arquivo,"+csvv("sessao = bloco # do CSV principal · questao = colunas da tabela dele · estatisticas = colunas do arquivo longo · eventos = colunas do log · tipos_de_evento = valores possíveis da coluna ev"));
+  L.push("arquivo,chave,o_que_quer_dizer,como_e_calculado");
+  [["sessao","sessao"],["questao","questao"],["estatisticas","estat"],
+   ["eventos","evento"],["tipos_de_evento","tipos_evento"]].forEach(([rot,k])=>{
+    DIC[k].forEach(([c,o,f])=>L.push([rot,c,csvv(o),csvv(f)].join(",")));
+  });
+  return L.join("\n");
+}
+
 function dl(name,txt,mime){
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([txt],{type:mime}));
@@ -1873,8 +2028,9 @@ function doExport(){
   dl(base+".csv","\ufeff"+buildCSV(),"text/csv");
   setTimeout(()=>dl(base+"_estatisticas.csv","\ufeff"+buildEstat(),"text/csv"),350);
   setTimeout(()=>dl(base+"_eventos.csv","\ufeff"+buildEventos(),"text/csv"),700);
+  setTimeout(()=>dl(base+"_dicionario.csv","\ufeff"+buildDic(),"text/csv"),1050);
   exported=true;
-  toast("3 CSV: sessão + estatísticas + eventos");
+  toast("4 CSV: sessão + estatísticas + eventos + dicionário");
 }
 $("expBtn").onclick=openEnd;
 $("endExp").onclick=()=>{

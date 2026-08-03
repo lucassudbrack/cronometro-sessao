@@ -205,8 +205,11 @@ const evCsv = () => {
     const o = {}; cols.forEach((k, i) => o[k] = v[i]); return o; });
 };
 const evs = evCsv();
-EQ("so comentario antes do cabecalho",
-   buildEventos().split(String.fromCharCode(10)).slice(0, 8).every(l => l.startsWith("#")), true);
+EQ("so comentario antes do cabecalho", (() => {
+   const L = buildEventos().split(String.fromCharCode(10));
+   const i = L.findIndex(l => !l.startsWith("#"));
+   return L.slice(0, i).every(l => l.startsWith("#")) && L[i].startsWith("n,t,");
+ })(), true);
 EQ("numeracao sequencial", evs.map(r => +r.n), evs.map((_, i) => i + 1));
 EQ("a coluna ms nao anda para tras",
    evs.every((r, i) => i === 0 ? r.ms === "0" : +r.ms >= +evs[i - 1].ms), true);
@@ -809,8 +812,13 @@ const h11 = buildCSV().split("\n").filter(l => l.startsWith("#"));
 const v11 = k => (h11.find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];
 EQ("os pesos vao no bloco",
    [v11("peso_A_acerto"), v11("peso_A_erro")], ["1", "-0.5"]);
-EQ("so os tipos em uso aparecem no bloco",
-   h11.some(l => l.startsWith("# peso_B_")), false);
+// As seis chaves de peso saem sempre, vazias quando a prova nao tem o tipo:
+// o conjunto de colunas do bloco nao pode variar de sessao para sessao.
+EQ("as seis chaves de peso saem sempre",
+   ["A","ME","B"].flatMap(t => ["acerto","erro"].map(x => v11("peso_"+t+"_"+x) !== undefined)),
+   [true,true,true,true,true,true]);
+EQ("e vem vazias no tipo que a prova nao tem",
+   [v11("peso_ME_acerto"), v11("peso_ME_erro")], ["", ""]);
 EQ("o bloco declara os tipos da prova e o modelo",
    [v11("tipos_na_prova"), v11("modelo")], ["A", "bacen"]);
 EQ("e os pontos", [v11("pontos"), v11("pontos_em_jogo"), v11("pontos_ignorando_B")],
@@ -923,8 +931,9 @@ EQ("as primitivas vao no bloco",
    ["C_m", "E_m", "C_B", "E_B", "N", "T", "I"].map(v12), ["1", "1", "1", "1", "1", "1", "6"]);
 EQ("e a identidade e declarada fechada", v12("identidade_fecha"), "1");
 EQ("os indices tambem", [v12("real"), v12("acerto_do_enfrentado")], ["0.0833", "0.5"]);
-EQ("e o bloco declara que a causa do branco nao e do app",
-   /caderno/.test(h12.find(l => l.startsWith("# causa_do_branco")) || ""), true);
+EQ("a explicacao do branco mudou para o dicionario",
+   [h12.some(l => l.startsWith("# causa_do_branco")),
+    /n[aã]o [eé] estado da prova/i.test(buildDic())], [false, true]);
 EQ("os indices de causa sumiram do bloco",
    h12.some(l => /^# branco_por_(tempo|conceito),/.test(l)), false);
 EQ("o estado entra no arquivo de estatisticas",
@@ -1214,8 +1223,9 @@ EQ("e o que sobrou tambem", [v16("tempo_sobrou"), v16("tempo_sobrou_seg")], ["09
 EQ("pausas no bloco", v16("n_pausas"), "2");
 EQ("e o tempo em pausa", /^\d+$/.test(v16("tempo_em_pausa_seg")), true);
 // 4) identidade nova
-EQ("a identidade nova esta declarada",
-   v16("identidade"), "C_m+E_m+C_B+E_B+N+T+itens_nao_preenchidos = I");
+EQ("a identidade nova esta no dicionario, na formula de I",
+   /C_m \+ E_m \+ C_B \+ E_B \+ N \+ T \+ itens_nao_preenchidos/
+     .test(buildDic().split(String.fromCharCode(10)).find(l => l.startsWith("sessao,I,"))), true);
 EQ("N no bloco, S fora", [v16("N"), h16.some(l => l.startsWith("# S,"))], ["1", false]);
 EQ("e ela fecha", v16("identidade_fecha"), "1");
 // 3) e 5) colunas
@@ -1227,6 +1237,71 @@ EQ("a Q1 traz os dois campos de pontos",
    r16[r16.indexOf(c16) + 1].split(",").slice(-2), ["0", "4"]);
 EQ("o doc de pag_auto tambem saiu",
    h16.some(l => l.startsWith("# col.pag_auto")), false);
+
+/* ---- cenário 17: o dicionário é a fonte da verdade ---- */
+const dicL = () => buildDic().split(String.fromCharCode(10));
+const dicRows = () => { const L = dicL(); const cab = L.find(l => l.startsWith("arquivo,"));
+  return L.slice(L.indexOf(cab) + 1).map(l => {
+    const v = []; let cur = "", asp = false;
+    for (let i = 0; i < l.length; i++) { const ch = l[i];
+      if (ch === String.fromCharCode(34)) {
+        if (asp && l[i+1] === String.fromCharCode(34)) { cur += String.fromCharCode(34); i++; }
+        else asp = !asp; continue; }
+      if (ch === "," && !asp) { v.push(cur); cur = ""; continue; } cur += ch; }
+    v.push(cur); return { arq: v[0], chave: v[1], o: v[2], f: v[3] }; });
+};
+
+EQ("o dicionario tem cabecalho proprio",
+   dicL().find(l => l.startsWith("arquivo,")), "arquivo,chave,o_que_quer_dizer,como_e_calculado");
+EQ("e so comentario antes dele",
+   dicL().slice(0, dicL().findIndex(l => !l.startsWith("#"))).every(l => l.startsWith("#")), true);
+EQ("cobre os cinco blocos", [...new Set(dicRows().map(r => r.arq))],
+   ["sessao", "questao", "estatisticas", "eventos", "tipos_de_evento"]);
+EQ("toda linha tem descricao", dicRows().every(r => r.o && r.o.length > 3), true);
+
+// BIJECAO 1: bloco # do CSV principal
+const mCsv = buildCSV().split(String.fromCharCode(10))
+  .filter(l => l.startsWith("# ")).map(l => l.slice(2, l.indexOf(",")));
+const mDic = dicRows().filter(r => r.arq === "sessao").map(r => r.chave);
+EQ("o bloco # emite exatamente o que o dicionario descreve", mCsv, mDic);
+EQ("e todo valor calculado tem entrada no dicionario",
+   _metaCalc.filter(k => mDic.indexOf(k) < 0), []);
+EQ("nenhuma entrada do dicionario ficou sem calculo",
+   mDic.filter(k => _metaCalc.indexOf(k) < 0), []);
+
+// BIJECAO 2, 3, 4: as colunas dos tres arquivos
+const colsDe = s => { const L = s.split(String.fromCharCode(10));
+  return L.find(l => !l.startsWith("#")).split(","); };
+EQ("as colunas da tabela por questao", colsDe(buildCSV()),
+   dicRows().filter(r => r.arq === "questao").map(r => r.chave));
+EQ("as colunas do arquivo de estatisticas", colsDe(buildEstat()),
+   dicRows().filter(r => r.arq === "estatisticas").map(r => r.chave));
+EQ("as colunas do log de eventos", colsDe(buildEventos()),
+   dicRows().filter(r => r.arq === "eventos").map(r => r.chave));
+
+// todo tipo de evento que a sessao produziu esta documentado
+const evsUsados = [...new Set(evCsv().map(r => r.ev))].sort();
+const evsDoc = dicRows().filter(r => r.arq === "tipos_de_evento").map(r => r.chave);
+EQ("todo evento emitido esta documentado", evsUsados.filter(e => evsDoc.indexOf(e) < 0), []);
+
+// o CSV principal aponta para os tres irmaos
+const v17 = k => (buildCSV().split(String.fromCharCode(10))
+  .find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];
+EQ("e aponta para os arquivos irmaos",
+   ["estatisticas_completas_em", "eventos_completos_em", "dicionario_em"]
+     .map(k => /\.csv$/.test(v17(k))), [true, true, true]);
+
+// doExport agenda os arquivos 2 a 4 com setTimeout, que nao dispara antes do
+// dump do arnes. Verifica o que da: o primeiro arquivo e o nome do quarto.
+// __files acumula entre cenarios, e doExport agenda os arquivos 2 a 4 com
+// setTimeout, que nao dispara antes do dump. O ultimo empilhado e o CSV desta.
+doExport();
+const ultArq = window.__files[window.__files.length - 1].name;
+EQ("o primeiro arquivo do export e o CSV da sessao",
+   /^[0-9]{8}_.*[^_]\.csv$/.test(ultArq), true);
+EQ("e o bloco nomeia o dicionario com o mesmo prefixo",
+   v17("dicionario_em"), ultArq.replace(/\.csv$/, "_dicionario.csv"));
+EQ("o dicionario tem conteudo", buildDic().length > 4000, true);
 
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +

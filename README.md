@@ -176,7 +176,12 @@ mutuamente exclusivos.
 
 ## Saída
 
-Três arquivos, todos CSV.
+Quatro arquivos, todos CSV. O quarto é o dicionário: ele descreve campo por
+campo o que os outros três emitem, e sai do **mesmo** DIC de onde o CSV lê a
+ordem e o conjunto de chaves do bloco `#`. Campo calculado sem descrição, ou
+descrito sem ser calculado, quebra a suíte — é isso que impede o dicionário de
+virar documentação velha. Documentação por campo mora só nele; os outros três
+guardam procedência e grão.
 
 `<nome>.csv` — uma linha por questão:
 
