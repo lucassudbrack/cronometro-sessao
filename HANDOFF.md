@@ -158,7 +158,10 @@ Todo item válido cai em **exatamente um**:
     C_m + E_m + C_B + E_B + N + T + itens_nao_preenchidos = I
 
 `I` = itens com gabarito e não anulados. `itens_no_set = I + anulados +
-sem_gabarito`. `identidade_fecha` é a auditoria: se der 0, há item sem destino.
+sem_gabarito`. **`identidade_fecha` é auditoria FRACA** — `nao_preenchido` está
+dentro da soma, então ela não falha por construção (o dicionário do app diz o
+mesmo desde 03/08). A auditoria com dente é `itens_no_set = I + anulados +
+sem_gabarito`, do lado consumidor (`identidade_real`).
 
 **Índices** (todos derivados, nenhum guardado): `real` (master, = pontos ÷
 pontos_em_jogo, versão ponderada de `(C_m−E_m)/I` que reduz exatamente a ela com
