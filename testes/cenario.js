@@ -3,6 +3,11 @@ $("nIn").value = "4";
 $("goalIn").value = "2";
 $("mData").value = "2026-08-02"; $("mData").dispatchEvent(new Event("change"));
 $("mConc").value = "ANPEC"; $("mConc").dispatchEvent(new Event("change"));
+EQ("o concurso sugere a banca, e a banca o pre-modelo", [ficha.banca, ficha.template], ["ANPEC", "anpec"]);
+// Este cenario testa relogio e revisita, nao a regra da ANPEC: volta ao setup de
+// fabrica, e mexer nele solta o modelo para livre.
+usa = { A: true, ME: true, B: true }; cfgA = 5; cfgME = 5; cfgB = 3; pesos = pesosPadrao();
+aplicaTpl("livre"); pintaUsa(); pintaEixos(); pintaPesos();
 $("mMat").value = "Estatística"; $("mMat").dispatchEvent(new Event("change"));
 $("mFonte").value = "PDF, misto"; $("mFonte").dispatchEvent(new Event("change"));
 EQ("nome padronizado da sessao", nomeBase(), "20260802_anpec_estatistica_prova_pdf_misto");
@@ -753,13 +758,14 @@ EQ("mas C/E e conta continuam la", [tipoVisivel("A"), tipoVisivel("B")], [true, 
 EQ("a tabela de pesos so mostra os tipos em uso",
    [...$("pesos").querySelectorAll(".rot")].map(r => r.textContent), ["C / E", "Conta"]);
 
-// BACEN
-$("tpl").value = "bacen"; $("tpl").dispatchEvent(new Event("change"));
-EQ("BACEN: so C/E", [usa.A, usa.ME, usa.B], [true, false, false]);
-EQ("BACEN: acerto X e erro -0,5X", [pesos.A.acerto, pesos.A.erro], [1, -0.5]);
-EQ("BACEN: 1 item por questao (padrao Cebraspe, a confirmar no edital)", cfgA, 1);
-EQ("a nota do modelo avisa que e para conferir",
-   /edital/.test($("tplHint").textContent), true);
+// Cebraspe (BACEN)
+$("tpl").value = "cebraspe"; $("tpl").dispatchEvent(new Event("change"));
+EQ("Cebraspe: so C/E", [usa.A, usa.ME, usa.B], [true, false, false]);
+EQ("Cebraspe: acerto X e erro -0,5X", [pesos.A.acerto, pesos.A.erro], [1, -0.5]);
+EQ("Cebraspe: 1 item por questao", cfgA, 1);
+EQ("a nota do modelo cita o item do edital que foi conferido",
+   /8\.11\.2/.test($("tplHint").textContent), true);
+EQ("e nao pede mais para conferir", /confira/.test($("tplHint").textContent), false);
 
 // com um tipo só, a questão já nasce com ele
 $("mConc").value = "BACEN"; $("mConc").dispatchEvent(new Event("change"));
@@ -820,7 +826,7 @@ EQ("as seis chaves de peso saem sempre",
 EQ("e vem vazias no tipo que a prova nao tem",
    [v11("peso_ME_acerto"), v11("peso_ME_erro")], ["", ""]);
 EQ("o bloco declara os tipos da prova e o modelo",
-   [v11("tipos_na_prova"), v11("modelo")], ["A", "bacen"]);
+   [v11("tipos_na_prova"), v11("modelo")], ["A", "cebraspe"]);
 EQ("e os pontos", [v11("pontos"), v11("pontos_em_jogo"), v11("pontos_ignorando_B")],
    ["0.5", "4", "0"]);
 const est11 = buildEstat().split("\n");
@@ -834,7 +840,7 @@ EQ("a soma da coluna bate com o total",
 /* ---- cenário 12: os seis estados, a identidade e os índices ---- */
 Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
 idx = []; sid = null;
-$("tpl").value = "bacen"; $("tpl").dispatchEvent(new Event("change"));   // só C/E, +1 / −0,5
+$("tpl").value = "cebraspe"; $("tpl").dispatchEvent(new Event("change"));   // só C/E, +1 / −0,5
 $("mConc").value = "BACEN"; $("mConc").dispatchEvent(new Event("change"));
 $("mMat").value = "Estados"; $("mMat").dispatchEvent(new Event("change"));
 $("mSub").value = ""; $("mSub").dispatchEvent(new Event("change"));
@@ -960,7 +966,7 @@ EQ("os indices saem no bloco do CSV principal", v12("I"), "6");
 // 4 dos 5 itens marcados com T embora, derrubando a primitiva T de 5 para 1.
 Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
 idx = []; sid = null;
-$("tpl").value = "bacen"; $("tpl").dispatchEvent(new Event("change"));
+$("tpl").value = "cebraspe"; $("tpl").dispatchEvent(new Event("change"));
 $("mConc").value = "BACEN"; $("mConc").dispatchEvent(new Event("change"));
 $("mMat").value = "Lacuna"; $("mMat").dispatchEvent(new Event("change"));
 $("mSub").value = ""; $("mSub").dispatchEvent(new Event("change"));
@@ -1026,7 +1032,7 @@ EQ("o contador ambiguo saiu do bloco",
 /* ---- cenário 14: tempo de prova trava a folha ---- */
 Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
 idx = []; sid = null;
-$("tpl").value = "bacen"; $("tpl").dispatchEvent(new Event("change"));
+$("tpl").value = "cebraspe"; $("tpl").dispatchEvent(new Event("change"));
 $("mConc").value = "BACEN"; $("mConc").dispatchEvent(new Event("change"));
 $("mMat").value = "Relogio"; $("mMat").dispatchEvent(new Event("change"));
 cfgA = 2; pintaEixos();
@@ -1114,8 +1120,10 @@ Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => loca
 idx = []; sid = null;
 $("tpl").value = "livre"; $("tpl").dispatchEvent(new Event("change"));
 usa = { A: true, ME: true, B: true }; pintaUsa();
+$("mConc").value = "CGU"; $("mConc").dispatchEvent(new Event("change"));
+// CGU sugere a FGV, e a FGV traz o pre-modelo dela; o cenario quer os tres tipos.
+aplicaTpl("livre"); usa = { A: true, ME: true, B: true }; pintaUsa();
 cfgA = 3; cfgME = 4; cfgB = 2; pintaEixos();
-$("mConc").value = "T"; $("mConc").dispatchEvent(new Event("change"));
 $("mMat").value = "Retoque"; $("mMat").dispatchEvent(new Event("change"));
 $("mSub").value = ""; $("mSub").dispatchEvent(new Event("change"));
 $("mFonte").value = ""; $("mFonte").dispatchEvent(new Event("change"));
@@ -1332,6 +1340,128 @@ EQ("o fmt declarado e o mesmo que o snapshot grava",
 EQ("nao sobrou nenhum literal congelado",
    [buildCSV(), buildEstat(), buildEventos(), buildDic()]
      .filter(s => s.indexOf("app sessao v1,") >= 0 || /gerado_por,app sessao v1$/m.test(s)), []);
+
+/* ---- cenário 19 (v20): concurso, prova, banca e modelo são eixos separados;
+   encerrar é definitivo; o relógio pode se esconder; o nome se copia ---- */
+Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
+idx = []; sid = null;
+$("newBtn").click();
+ficha.concurso = ""; ficha.prova = ""; ficha.banca = ""; $("mConc").value = ""; $("mProva").value = ""; $("mBanca").value = "";
+$("nIn").value = "3";
+$("startBtn").click();
+EQ("sem concurso a sessao nao comeca", started, false);
+EQ("o concurso e lista fechada", [...$("mConc").options].map(o => o.value), ["", "ANPEC", "BACEN", "CGU"]);
+
+$("mConc").value = "CGU"; $("mConc").dispatchEvent(new Event("change"));
+EQ("CGU sugere a prova e a banca dela", [ficha.prova, ficha.banca], ["CGU 2021", "FGV"]);
+EQ("e a FGV sugere o pre-modelo", ficha.template, "fgv");
+EQ("FGV: so multipla, 5 alternativas", [usa.A, usa.ME, usa.B, cfgME], [false, true, false, 5]);
+EQ("FGV: acerto X e erro 0", [pesos.ME.acerto, pesos.ME.erro], [1, 0]);
+
+// prova de outra banca sobre assunto do edital: o concurso fica, a banca e o modelo mudam
+$("mBanca").value = "Cebraspe"; $("mBanca").dispatchEvent(new Event("change"));
+EQ("a banca manda no modelo, nao o concurso", [ficha.concurso, ficha.template], ["CGU", "cebraspe"]);
+$("mProva").value = "TCU 2022"; $("mProva").dispatchEvent(new Event("change"));
+$("mBanca").value = "FCC"; $("mBanca").dispatchEvent(new Event("change"));
+EQ("banca sem pre-modelo deixa o modelo livre", ficha.template, "livre");
+$("mConc").value = "BACEN"; $("mConc").dispatchEvent(new Event("change"));
+EQ("trocar o concurso nao apaga o que voce escreveu", [ficha.prova, ficha.banca], ["TCU 2022", "FCC"]);
+$("mProva").value = ""; $("mProva").dispatchEvent(new Event("change"));
+$("mBanca").value = ""; $("mBanca").dispatchEvent(new Event("change"));
+$("mConc").value = "CGU"; $("mConc").dispatchEvent(new Event("change"));
+EQ("mas preenche o que esta vazio", [ficha.prova, ficha.banca, ficha.template], ["CGU 2021", "FGV", "fgv"]);
+
+// mexer em qualquer peca do pre-modelo o solta para livre
+const pesoIn = $("pesos").querySelectorAll("input")[1];
+pesoIn.value = "-0.25"; pesoIn.dispatchEvent(new Event("input"));
+EQ("mexer num peso torna o modelo livre", ficha.template, "livre");
+$("tpl").value = "fgv"; $("tpl").dispatchEvent(new Event("change"));
+[...$("segME").querySelectorAll("button")].find(b => b.textContent === "5").click();
+EQ("tocar o eixo que ja estava nao solta nada", ficha.template, "fgv");
+[...$("segME").querySelectorAll("button")].find(b => b.textContent === "4").click();
+EQ("mudar o eixo solta", ficha.template, "livre");
+$("tpl").value = "fgv"; $("tpl").dispatchEvent(new Event("change"));
+
+// copiar o nome
+let copiado = null;
+try { Object.defineProperty(navigator, "clipboard", { configurable: true,
+  value: { writeText: t => { copiado = t; return Promise.resolve(); } } }); } catch (e) {}
+$("mMat").value = "Auditoria Governamental"; $("mMat").dispatchEvent(new Event("change"));
+$("mSub").value = ""; $("mSub").dispatchEvent(new Event("change"));
+$("mFonte").value = "TEC"; $("mFonte").dispatchEvent(new Event("change"));
+$("mData").value = "2026-09-28"; $("mData").dispatchEvent(new Event("change"));
+$("nomeCopy").click();
+EQ("o botao copia o nome da sessao", copiado, "20260928_cgu_auditoria_governamental_prova_tec");
+
+// relogio oculto escolhido no setup
+document.querySelector('#segRel button[data-r="1"]').click();
+$("limIn").value = "10"; $("goalIn").value = "";
+$("startBtn").click();
+EQ("com concurso a sessao comeca", started, true);
+EQ("o start registra prova, banca e relogio", (() => { const e = events.find(x => x.ev === "start");
+  return [e.prova, e.banca, e.relogio_oculto, e.modelo]; })(), ["CGU 2021", "FGV", true, "fgv"]);
+EQ("o corpo marca o relogio oculto", document.body.classList.contains("relOculto"), true);
+select(1); adv(60000);
+setOculto(false); adv(30000);
+setOculto(true); adv(15000);
+NEAR("tempo de sessao com o relogio oculto", relogioOcultoSeg(), 75, 0.1);
+setRunning(false); adv(20000); setRunning(true); adv(5000);
+NEAR("pausa nao conta como tempo oculto", relogioOcultoSeg(), 80, 0.1);
+EQ("cada troca do relogio vira evento", events.filter(e => e.ev === "relogio").map(e => e.oculto), [false, true]);
+[...document.querySelectorAll("#answerArea .opts button")].find(b => b.textContent === "Ac").click();
+
+// encerrar
+const passes19 = passes(2);
+window.__confirmYes = false; $("endFim").click();
+EQ("sem confirmar nao encerra", encerrada, null);
+window.__confirmYes = true; $("endFim").click();
+EQ("confirmado, encerra", typeof encerrada, "string");
+EQ("e o relogio para", running, false);
+EQ("a passada aberta foi fechada", visit, null);
+EQ("o botao de retomar fica morto", $("toggle").disabled, true);
+setRunning(true);
+EQ("nada religa o relogio", running, false);
+select(2);
+EQ("tocar numa questao abre sem relogio", [running, curQ], [false, 2]);
+EQ("e nao conta passada nova", passes(2), passes19);
+const dur = sessionLive(); adv(60000);
+EQ("o tempo de sessao congela", sessionLive(), dur);
+travado = true;
+EQ("encerrada, nada fica travado, nem com o tempo esgotado", bloqueia(), false);
+travado = false;
+curQ = 1; renderQ();
+[...document.querySelectorAll("#answerArea .opts button")].find(b => b.textContent === "B?").click();
+const ult19 = events[events.length - 1];
+EQ("mudanca depois de encerrar sai carimbada", [ult19.ev, ult19.pos_fechamento], ["mark", true]);
+$("endBack").click(); curQ = 1; setPag("7");
+const h19 = buildCSV().split(String.fromCharCode(10)).filter(l => l.startsWith("#"));
+const v19 = k => (h19.find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];
+EQ("o bloco tem concurso, prova e banca separados",
+   [v19("concurso"), v19("prova"), v19("banca"), v19("modelo")], ["CGU", "CGU 2021", "FGV", "fgv"]);
+EQ("os pesos de multipla saem preenchidos", [v19("peso_ME_acerto"), v19("peso_ME_erro")], ["1", "0"]);
+EQ("encerrada_em no bloco", /^20/.test(v19("encerrada_em")), true);
+EQ("so mudanca de resposta conta; pagina nao", v19("n_mudancas_pos_fechamento"), "1");
+EQ("o tempo oculto sai em segundos inteiros", v19("relogio_oculto_seg"), "80");
+const evs19 = [...new Set(evCsv().map(r => r.ev))];
+EQ("os eventos novos estao no dicionario",
+   ["encerrada", "relogio"].filter(e => evs19.indexOf(e) >= 0 &&
+     dicRows().filter(r => r.arq === "tipos_de_evento").map(r => r.chave).indexOf(e) < 0), []);
+EQ("o bloco # segue batendo com o dicionario",
+   buildCSV().split(String.fromCharCode(10)).filter(l => l.startsWith("# ")).map(l => l.slice(2, l.indexOf(","))),
+   dicRows().filter(r => r.arq === "sessao").map(r => r.chave));
+
+// sobrevive a retomar, e o "bacen" antigo vira "cebraspe"
+const snap19 = snapshot();
+EQ("o snapshot guarda o encerramento e o relogio", [!!snap19.encerrada, snap19.relOculto], [true, true]);
+const velho = JSON.parse(JSON.stringify(snap19));
+velho.ficha.template = "bacen"; velho.ficha.concurso = "bacen"; velho.encerrada = null;
+retomar(velho);
+EQ("modelo antigo bacen vira cebraspe", ficha.template, "cebraspe");
+EQ("concurso digitado a mao casa sem caixa", ficha.concurso, "BACEN");
+EQ("sessao nao encerrada volta a poder correr", $("toggle").disabled, false);
+retomar(snap19);
+EQ("sessao encerrada continua encerrada depois de retomar", [typeof encerrada, $("toggle").disabled], ["string", true]);
+setOculto(false);
 
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +

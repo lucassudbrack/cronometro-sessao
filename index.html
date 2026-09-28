@@ -143,6 +143,11 @@
   .opts button{flex:1; padding:10px 2px; font-family:var(--mono); font-size:12px; text-transform:none; letter-spacing:0}
   .opts button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
   .opts .sep{flex:0 0 5px}
+  .item.me .row{flex-wrap:wrap}
+  .item.me .opts{flex:1 1 100%; flex-wrap:wrap; row-gap:5px; column-gap:8px}
+  .item.me .grp{display:flex; gap:3px; flex:1 1 28%}
+  .item.me .opts button.limpa{flex:0 0 44px}
+  .item.me .flags{margin:6px 0 0; flex:1 0 100%; justify-content:flex-end}
   /* borracha: acao, nao opcao. Nunca fica selecionada e nao usa a cor de escolha. */
   .opts button.limpa, .numpad button.limpa{color:var(--dim); border-style:dashed}
   .opts button.limpa:not(:disabled):active, .numpad button.limpa:not(:disabled):active{
@@ -261,6 +266,15 @@
     color:#fff; font-size:12px; font-weight:600; padding:8px 14px; border-radius:20px; opacity:0;
     transition:opacity .2s; pointer-events:none; z-index:9}
   .toast.on{opacity:1}
+  .copia{flex:0 0 auto; padding:6px 10px; font-size:11px}
+  /* Relógio oculto: some tudo o que mostra tempo decorrido. O tempo continua sendo
+     medido — o que se esconde é a leitura, não o registro. */
+  .headtxt{cursor:pointer}
+  body.relOculto .q .t, body.relOculto .lrow .d, body.relOculto .lrow .w,
+  body.relOculto .foot .stat .v{visibility:hidden}
+  body.relOculto .q.over .t{color:inherit}
+  body.relOculto #clock{font-size:13px; letter-spacing:0}
+  body.encerrada #toggle{opacity:.5}
 </style>
 
 <div class="head">
@@ -342,11 +356,6 @@
     <span class="eyebrow">Sessões guardadas</span>
     <div class="sess" id="sessList"></div>
   </div>
-  <div class="field soNova">
-    <span class="eyebrow">Modelo de prova</span>
-    <select id="tpl"></select>
-    <p class="hint" id="tplHint"></p>
-  </div>
   <div class="field">
     <span class="eyebrow">Tipo de sessão</span>
     <div class="seg3" id="segTipo">
@@ -363,14 +372,26 @@
       <span class="eyebrow">Questões</span><input id="nIn" value="15" inputmode="numeric"></div>
   </div>
   <div class="field"><span class="eyebrow">Concurso</span>
-    <input id="mConc" list="vConc" autocomplete="off" placeholder="ANPEC"></div>
+    <select id="mConc"><option value="">— escolha —</option></select></div>
+  <div class="row2">
+    <div class="field" style="flex:1"><span class="eyebrow">Prova de origem</span>
+      <input id="mProva" list="vProva" autocomplete="off" placeholder="BACEN 2024"></div>
+    <div class="field" style="flex:0 0 118px"><span class="eyebrow">Banca</span>
+      <input id="mBanca" list="vBanca" autocomplete="off" placeholder="Cebraspe"></div>
+  </div>
+  <div class="field soNova">
+    <span class="eyebrow">Modelo de pontuação</span>
+    <select id="tpl"></select>
+    <p class="hint" id="tplHint"></p>
+  </div>
   <div class="field"><span class="eyebrow">Matéria</span>
     <input id="mMat" list="vMat" autocomplete="off" placeholder="Estatística"></div>
   <div class="field"><span class="eyebrow">Subtópico</span>
     <input id="mSub" list="vSub" autocomplete="off" placeholder="Séries temporais"></div>
   <div class="field"><span class="eyebrow">Fonte</span>
     <input id="mFonte" list="vFonte" autocomplete="off" placeholder="PDF Estratégia"></div>
-  <p class="hint" id="nomePrev"></p>
+  <div class="row2"><p class="hint" id="nomePrev" style="flex:1"></p>
+    <button id="nomeCopy" class="copia">Copiar</button></div>
   <div class="field soNova">
     <span class="eyebrow">Apelidos das questões — opcional</span>
     <p class="hint">Para set montado de provas diferentes. Em branco, vale a página a que a questão se refere.</p>
@@ -414,6 +435,15 @@
       <input id="goalIn" placeholder="4" inputmode="decimal"></div>
   </div>
   <p class="hint soNova cronoOnly">Ao esgotar o tempo de prova o cronômetro trava e a folha fecha. Vazio = sem limite.</p>
+  <div class="field soNova cronoOnly">
+    <span class="eyebrow">Relógio durante a sessão</span>
+    <div class="seg" id="segRel">
+      <button data-r="0">Visível</button>
+      <button data-r="1">Oculto</button>
+    </div>
+    <p class="hint">Oculto imita a prova: o tempo continua sendo medido e o limite continua travando.
+      Tocar no relógio, no alto, alterna durante a sessão.</p>
+  </div>
   <button class="primary" id="startBtn" style="padding:13px">Começar</button>
 </div>
 
@@ -426,6 +456,7 @@
     <span class="eyebrow">Identificação</span>
     <div class="row2">
       <div class="ident" id="identResumo"></div>
+      <button id="identCopy" class="copia">Copiar</button>
       <button id="identEdit">Editar</button>
     </div>
   </div>
@@ -438,11 +469,14 @@
     <button id="endRev">Conferir</button>
     <button id="endGab">Gabarito</button>
   </div>
+  <button id="endFim" style="padding:12px">Encerrar a sessão</button>
+  <p class="hint" id="endFimHint">Encerrar é definitivo: o relógio não volta a correr. Tudo continua
+     editável, e cada mudança depois disso sai marcada no log.</p>
   <button class="primary" id="endExp" style="padding:14px">Exportar</button>
 </div>
 
 <datalist id="vMat"></datalist><datalist id="vSub"></datalist>
-<datalist id="vFonte"></datalist><datalist id="vConc"></datalist>
+<datalist id="vFonte"></datalist><datalist id="vProva"></datalist><datalist id="vBanca"></datalist>
 
 <div class="setup sheet hide" id="fimSheet">
   <div>
@@ -479,7 +513,7 @@ const $ = id => document.getElementById(id);
    ele altera, e é só isso que ele altera.
    APP_FMT é o formato do snapshot, e é a mesma constante que snapshot() grava:
    quem lê o CSV descobre qual migração de retomar() aquele estado atravessou. */
-const APP_VER="v19", APP_COMMIT="d8e6c78", APP_FMT=5;
+const APP_VER="v20", APP_COMMIT="d8e6c78", APP_FMT=5;
 const GERADO_POR="app sessao "+APP_VER+" "+APP_COMMIT+" fmt"+APP_FMT;
 
 const KEY = "sessao:v1";
@@ -523,10 +557,25 @@ const TEMPLATES={
   anpec: {nome:"ANPEC", nota:"5 itens por questão de C/E · sem múltipla escolha · conta com 2 dígitos · C/E vale +X e −X · conta vale +5X e 0.",
     usa:{A:true,ME:false,B:true}, cfgA:5, cfgB:2,
     pesos:{A:{acerto:1,erro:-1}, B:{acerto:5,erro:0}}},
-  bacen: {nome:"BACEN", nota:"Só C/E, acerto +X e erro −0,5X. O nº de itens está em 1 por questão (padrão Cebraspe) — confira no edital antes de valer.",
+  cebraspe: {nome:"Cebraspe", nota:"Certo/errado, 1 item por questão · acerto +X, erro −0,5X, branco 0 (edital BCB 2024, item 8.11.2).",
     usa:{A:true,ME:false,B:false}, cfgA:1,
-    pesos:{A:{acerto:1,erro:-0.5}}}
+    pesos:{A:{acerto:1,erro:-0.5}}},
+  fgv: {nome:"FGV", nota:"Múltipla escolha, 5 alternativas · acerto +X, erro 0 — sem desconto por erro (edital CGU 2021, item 10.2).",
+    usa:{A:false,ME:true,B:false}, cfgME:5,
+    pesos:{ME:{acerto:1,erro:0}}}
 };
+// Três eixos separados, porque se faz questão de outra banca sobre assunto do
+// edital: o CONCURSO é o alvo (é ele que entra no nome da sessão), a PROVA DE
+// ORIGEM e a BANCA dizem de onde a questão veio, e o MODELO é a regra de
+// pontuação. O concurso só sugere prova e banca; a banca só sugere o modelo.
+const CONCURSOS={
+  ANPEC:{prova:"ANPEC", banca:"ANPEC"},
+  BACEN:{prova:"BACEN 2024", banca:"Cebraspe"},
+  CGU:  {prova:"CGU 2021", banca:"FGV"}
+};
+// Chave do template que a banca sugere. Banca sem pré-modelo deixa o setup livre.
+const tplDaBanca = b => { const k=(b||"").trim().toLowerCase();
+  return (k && TEMPLATES[k] && k!=="livre") ? k : "livre"; };
 let times={}, log=[], visit=null, ans={}, events=[];
 // pags vive fora de ans de propósito: a página do caderno é fato físico da sessão,
 // não parte da resposta. Trocar o tipo da questão zera ans[q] e não pode levar a página junto.
@@ -542,7 +591,7 @@ let apelidos={};
 // de cada questão. É esta ficha que dá nome ao arquivo e à sessão guardada.
 const hojeISO = () => { const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
-const fichaVazia=()=>({data:hojeISO(),concurso:"",mat:"",sub:"",fonte:"",tipo:"prova"});
+const fichaVazia=()=>({data:hojeISO(),concurso:"",prova:"",banca:"",mat:"",sub:"",fonte:"",tipo:"prova"});
 let ficha=fichaVazia(), olhar={};
 // Prova e teste correm no relógio; aprendizado não precisa. Quando não corre,
 // tempo não é registrado e sai vazio — zero seria mentira, vazio é dado ausente.
@@ -554,6 +603,16 @@ const TIPOS={prova:true, teste:true, aprendizado:false};
 let gab={}, gabAberto=null;
 let running=false, segStart=null, sessionAccum=0, sessionStart=null, started=false, curQ=null;
 let exported=false, revisando=false;
+// Encerramento definitivo: instante ISO em que você encerrou, ou null. Depois
+// dele nenhum caminho religa o relógio (tocar numa questão, espaço, Retomar) e
+// nada fica travado — mas todo evento sai carimbado pos_fechamento, para quem
+// corrige saber o que mudou depois de a sessão acabar.
+let encerrada=null;
+// Relógio oculto. O tempo segue medido igual; esconder é só não mostrar. O que
+// se guarda é quanto tempo de sessão correu com ele escondido, porque isso muda
+// a leitura de pacing. ocultoDesde está em tempo de SESSÃO (sessionLive), não de
+// parede, então pausa não conta como tempo oculto.
+let relOculto=false, ocultoDesde=null, ocultoAccum=0;
 // Tempo de prova. Ao esgotar, o cronômetro para e a folha trava — mas a
 // conferência e o gabarito continuam abertos, porque corrigir um registro não é
 // responder. Tudo que sair depois vai carimbado com pos_limite.
@@ -571,7 +630,7 @@ const visitLive=()=> visit ? visit.sec+elapsed() : 0;
 const qLive=q=> (times[q]||0) + (visit&&visit.q===q ? elapsed() : 0);
 const sessionLive=()=> sessionAccum + (running&&sessionStart!==null ? (now()-sessionStart)/1000 : 0);
 const restante = () => limite ? Math.max(0, limite - sessionLive()) : null;
-const bloqueia = () => travado && !revisando;
+const bloqueia = () => travado && !revisando && !encerrada;
 const passes=q=> log.filter(v=>v.q===q).length + (visit&&visit.q===q?1:0);
 const sec1 = x => Math.round(x*10)/10;   // o log guarda décimos; o CSV arredonda
 
@@ -582,6 +641,7 @@ const sec1 = x => Math.round(x*10)/10;   // o log guarda décimos; o CSV arredon
 function ev(o){
   events.push(Object.assign({t:iso(Date.now())}, o, revisando?{rev:true}:{},
     travado?{pos_limite:true}:{},
+    encerrada?{pos_fechamento:true}:{},
     // olhar marcado depois de ver o gabarito não é a mesma escolha que antes
     (gabAberto && o.ev==="olhar") ? {pos_gabarito:true} : {}));
   exported=false; saveNow();
@@ -610,7 +670,7 @@ function commit(){ if(segStart===null) return;
   segStart=null; }
 
 function setRunning(on){
-  if(on && (!cronometrar || travado)) return;
+  if(on && (!cronometrar || travado || encerrada)) return;
   if(on===running) return;
   if(on){ running=true; segStart=now(); sessionStart=now(); wake(); ev({ev:"resume", q:visit?visit.q:null}); }
   else{ commit(); if(sessionStart!==null){ sessionAccum+=(now()-sessionStart)/1000; sessionStart=null; }
@@ -643,11 +703,76 @@ $("fimRev").onclick=()=>{ $("fimSheet").classList.add("hide"); openRev(); };
 $("fimGab").onclick=()=>{ $("fimSheet").classList.add("hide"); openGab(); };
 $("fimEnd").onclick=()=>{ $("fimSheet").classList.add("hide"); openEnd(); };
 
+// Tempo de sessão que correu com o relógio escondido. Vazio sem cronômetro:
+// sem relógio não há o que esconder, e zero afirmaria que houve.
+const relogioOcultoSeg = () => ocultoAccum + (relOculto && ocultoDesde!==null ? sessionLive()-ocultoDesde : 0);
+function setOculto(on){
+  on=!!on; if(on===relOculto) return;
+  if(on) ocultoDesde=sessionLive();
+  else { ocultoAccum=relogioOcultoSeg(); ocultoDesde=null; }
+  relOculto=on;
+  document.body.classList.toggle("relOculto", relOculto);
+  pintaRel();
+  if(started) ev({ev:"relogio", oculto:relOculto});
+}
+function pintaRel(){
+  document.querySelectorAll("#segRel button").forEach(b=>
+    b.classList.toggle("sel", (b.dataset.r==="1")===relOculto));
+}
+document.querySelectorAll("#segRel button").forEach(b=>b.onclick=()=>setOculto(b.dataset.r==="1"));
+$("clock").parentNode.onclick=()=>{ if(started && cronometrar) setOculto(!relOculto); };
+
+// Encerrar fecha a última passada aberta, para o tempo dela valer até aqui e não
+// até o próximo toque, e grava o instante. Não tem volta: é isso que o torna um
+// marco que a correção pode usar.
+function encerrar(){
+  if(encerrada || !started) return;
+  if(!confirm("Encerrar a sessão de vez? O relógio não volta a correr. "+
+              "Continua dando para corrigir tudo, e cada mudança sai marcada no log.")) return;
+  setRunning(false);
+  commit();
+  if(visit){ log.push(visit); ev({ev:"leave", q:visit.q, sec:sec1(visit.sec)}); visit=null; }
+  ev({ev:"encerrada", duracao_seg:Math.round(sessionLive())});
+  encerrada=iso(Date.now());
+  pintaEncerrada(); paint(); saveNow();
+}
+function pintaEncerrada(){
+  document.body.classList.toggle("encerrada", !!encerrada);
+  $("toggle").disabled=!!encerrada;
+  if(encerrada) $("toggle").textContent="Encerrada";
+  $("endFim").disabled=!!encerrada;
+  $("endFim").textContent = encerrada
+    ? "Sessão encerrada às "+new Date(encerrada).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})
+    : "Encerrar a sessão";
+}
+$("endFim").onclick=encerrar;
+
+// Copiar o nome: é a identidade da sessão (título no Painel, nome no Drive), e
+// digitar à mão é onde nasce o erro que quebra o casamento por identidade.
+function copiaNome(){
+  const n=nomeBase(); if(!n){ toast("sem identificação para copiar"); return n; }
+  const fallback=()=>{ const t=document.createElement("textarea"); t.value=n;
+    document.body.appendChild(t); t.select(); let ok=false;
+    try{ ok=document.execCommand("copy"); }catch(e){}
+    t.remove(); toast(ok ? "nome copiado" : "não consegui copiar — selecione o nome"); };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText)
+      navigator.clipboard.writeText(n).then(()=>toast("nome copiado"), fallback);
+    else fallback();
+  }catch(e){ fallback(); }
+  return n;
+}
+$("nomeCopy").onclick=copiaNome;
+$("identCopy").onclick=copiaNome;
+
 let wl=null;
 async function wake(){ try{ if("wakeLock" in navigator && !wl) wl=await navigator.wakeLock.request("screen"); }catch(e){} }
 function unwake(){ try{ if(wl){ wl.release(); wl=null; } }catch(e){} }
 
 function select(q, keepPane){
+  // Sessão encerrada: tocar numa questão abre para corrigir, sem passada nova e
+  // sem relógio. Era por aqui que mexer na página no fechamento religava o tempo.
+  if(encerrada){ if(!keepPane) openQ(q); return; }
   sairRev();   // voltar a cronometrar encerra a conferência
   if(visit && visit.q===q){ if(!keepPane) openQ(q); return; }
   commit();
@@ -674,7 +799,9 @@ function openQ(q){
   // que você não alcançou, e esses itens virariam S — "enfrentei sem palpite" —
   // quando o certo é não existirem.
   const so=["A","ME","B"].filter(k=>usa[k]);
-  if(!ans[q] && so.length===1 && !bloqueia()){ ans[q]=blankAns(so[0]); ev({ev:"tipo",q:q,tipo:so[0],auto:true}); }
+  // Encerrada vale o mesmo: a sessão acabou, e abrir uma questão para olhar não
+  // é declarar que ela foi lida.
+  if(!ans[q] && so.length===1 && !bloqueia() && !encerrada){ ans[q]=blankAns(so[0]); ev({ev:"tipo",q:q,tipo:so[0],auto:true}); }
   curQ=q; renderQ(); showPane("paneQ");
 }
 
@@ -898,7 +1025,7 @@ function renderQ(){
   const letters = a.tipo==="ME" ? LETRAS.slice(0,a.alt).split("") : ["V","F"];
   area.innerHTML="";
   a.itens.forEach((it,idx)=>{
-    const box=document.createElement("div"); box.className="item"+(it.T?" semtempo":"")+((it.r===null&&it.B)?" embranco":"");
+    const box=document.createElement("div"); box.className="item"+(a.tipo==="ME"?" me":"")+(it.T?" semtempo":"")+((it.r===null&&it.B)?" embranco":"");
     const lab=document.createElement("div"); lab.className="itemlab";
     lab.textContent = (a.tipo==="ME" ? "alternativa" : ("item "+(idx+1)))+
       (it.T ? " · não alcancei por tempo" :
@@ -906,16 +1033,19 @@ function renderQ(){
     box.appendChild(lab);
     const row=document.createElement("div"); row.className="row";
     const opts=document.createElement("div"); opts.className="opts";
+    // Em múltipla, cada letra vira um grupo que quebra linha: 5 alternativas são 15
+    // botões, e numa linha só eles estouravam a janela flutuante de 360 px.
     letters.forEach((L,li)=>{
+      const alvo = a.tipo==="ME" ? opts.appendChild(Object.assign(document.createElement("div"),{className:"grp"})) : opts;
       ["c","?","x"].forEach(cf=>{
         const b=document.createElement("button");
         b.textContent=L+cf;
         b.className = (it.r===L && it.c===cf) ? "sel" : "";
         b.disabled = it.T || bloqueia();   // não alcancei por tempo: não há o que marcar
         b.onclick=()=>{ it.r=L; it.c=cf; ev({ev:"mark",q:q,item:idx+1,resp:L,conf:cf}); renderQ(); paint(); save(); };
-        opts.appendChild(b);
+        alvo.appendChild(b);
       });
-      if(li<letters.length-1){ const s=document.createElement("div"); s.className="sep"; opts.appendChild(s); }
+      if(a.tipo!=="ME" && li<letters.length-1){ const s=document.createElement("div"); s.className="sep"; opts.appendChild(s); }
     });
     const bl=document.createElement("button");
     bl.textContent="×"; bl.className="limpa"; bl.title="apaga a marcação deste item";
@@ -1031,6 +1161,7 @@ function tick(){
     requestAnimationFrame(tick); return;
   }
   const v=visitLive();
+  if(relOculto){ $("clock").textContent="relógio oculto"; requestAnimationFrame(tick); return; }
   $("clock").innerHTML = fmt(v).replace(":",'<span class="colon">:</span>')+'<span class="dec">.'+Math.floor((v%1)*10)+'</span>';
   const rst=restante();
   $("total").textContent = rst===null ? fmt(sessionLive()) : fmt(rst);
@@ -1061,6 +1192,7 @@ function snapshot(){
     }
   }
   return {fmt:APP_FMT,nome:nomeBase(),N,goal,limite,travado,cfgA,cfgME,cfgB,usa,pesos,cronometrar,times:t,log,visit:vis,ans,pags,apelidos,ficha,olhar,gab,gabAberto,events,
+          encerrada,relOculto,ocultoAccum,ocultoDesde,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -1121,6 +1253,14 @@ function retomar(prev){
   });
   pags=prev.pags||{}; apelidos=prev.apelidos||{}; invalidaPags(); ficha=Object.assign(fichaVazia(),prev.ficha||{}); olhar=prev.olhar||{};
   if(!TIPOS.hasOwnProperty(ficha.tipo)) ficha.tipo="prova";   // fmt<3 guardava texto livre
+  // v20: o modelo "bacen" virou "cebraspe" — é a mesma regra, agora pelo nome da
+  // banca, que é como o Painel grava. O evento start antigo fica como foi.
+  if(ficha.template==="bacen") ficha.template="cebraspe";
+  normalizaConcurso();
+  encerrada=prev.encerrada||null;
+  ocultoAccum=prev.ocultoAccum||0; relOculto=!!prev.relOculto;
+  ocultoDesde = relOculto ? (prev.ocultoDesde!=null ? prev.ocultoDesde : prev.sessionAccum||0) : null;
+  document.body.classList.toggle("relOculto", relOculto);
   gab=prev.gab||{}; gabAberto=prev.gabAberto||null;
   if(prev.visit){
     // A passada que estava aberta vira passada fechada, valendo o que foi medido
@@ -1133,7 +1273,7 @@ function retomar(prev){
   }
   visit=null; sessionAccum=prev.sessionAccum||0; sessionStart=null; running=false;
   started=true; exported=false; curQ=null; sairRev();
-  pintaTipo(); pintaNome(); pintaTpl(); pintaUsa(); pintaEixos(); pintaPesos();
+  pintaTipo(); pintaNome(); pintaTpl(); pintaUsa(); pintaEixos(); pintaPesos(); pintaRel(); pintaEncerrada();
   buildGrid(); paint(); showPane("paneGrid"); closeEnd(); $("setup").classList.add("hide"); saveNow();
 }
 
@@ -1436,8 +1576,38 @@ $("endRev").onclick=openRev;
 $("revBack").onclick=()=>{ sairRev(); openEnd(); };
 
 /* ---------- folha de fechamento ---------- */
-const FICHA=[["concurso","mConc","vConc"],["mat","mMat","vMat"],
-             ["sub","mSub","vSub"],["fonte","mFonte","vFonte"]];
+// O concurso não tem vocabulário: é lista fechada, porque é dele que a correção
+// lê a que Fila, Edital e Aprendizagens a sessão pertence (INV-CONCURSO).
+const FICHA=[["concurso","mConc",null],["prova","mProva","vProva"],["banca","mBanca","vBanca"],
+             ["mat","mMat","vMat"],["sub","mSub","vSub"],["fonte","mFonte","vFonte"]];
+Object.keys(CONCURSOS).forEach(c=>{ const o=document.createElement("option");
+  o.value=c; o.textContent=c; $("mConc").appendChild(o); });
+// Sessão antiga com concurso digitado à mão: casa sem caixa quando dá; quando não
+// dá, o valor vira opção para não sumir do select (lacuna se registra, não se apaga).
+function normalizaConcurso(){
+  const v=(ficha.concurso||"").trim(); if(!v) return;
+  const k=Object.keys(CONCURSOS).find(c=>c.toLowerCase()===v.toLowerCase());
+  if(k){ ficha.concurso=k; return; }
+  if(![...$("mConc").options].some(o=>o.value===v)){
+    const o=document.createElement("option"); o.value=v; o.textContent=v+" (antigo)";
+    $("mConc").appendChild(o); }
+}
+// Concurso sugere prova e banca, mas só onde você não escreveu nada seu: campo
+// vazio ou ainda com a sugestão de outro concurso. A banca, por sua vez, sugere
+// o modelo — mas nunca no meio da sessão, onde trocar a regra mudaria o placar.
+const ehSugestao = (campo,v) => !v || Object.values(CONCURSOS).some(c=>c[campo]===v);
+function sugereDoConcurso(){
+  const d=CONCURSOS[ficha.concurso]; if(!d) return;
+  let mudouBanca=false;
+  if(ehSugestao("prova",ficha.prova)) { ficha.prova=d.prova; $("mProva").value=d.prova; }
+  if(ehSugestao("banca",ficha.banca) && ficha.banca!==d.banca){
+    ficha.banca=d.banca; $("mBanca").value=d.banca; mudouBanca=true; }
+  if(mudouBanca) sugereDaBanca();
+}
+function sugereDaBanca(){
+  if($("setup").classList.contains("editando")) return;
+  aplicaTpl(tplDaBanca(ficha.banca));
+}
 // Nome único da sessão: serve de nome de arquivo e de apelido na lista.
 // aaaammdd_concurso_materia_tiposessao_fonte, tudo minúsculo, sem acento.
 const sluglow = s => (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"")
@@ -1473,16 +1643,22 @@ let vocab={};
 async function loadVocab(){ if(!store) return;
   try{ vocab=JSON.parse((await store.get(VKEY)).value)||{}; }catch(e){ vocab={}; } }
 function learnVocab(){
-  FICHA.forEach(([k])=>{
+  FICHA.forEach(([k,,dl])=>{
+    if(!dl) return;
     const v=(ficha[k]||"").trim(); if(!v) return;
     const l=(vocab[k]||[]).filter(x=>x.toLowerCase()!==v.toLowerCase());
     l.unshift(v); vocab[k]=l.slice(0,40);
   });
   if(store) store.set(VKEY, JSON.stringify(vocab)).catch(()=>{});
 }
+const SUGESTOES={prova:Object.values(CONCURSOS).map(c=>c.prova),
+                 banca:Object.values(CONCURSOS).map(c=>c.banca)};
 function paintVocab(){
   FICHA.forEach(([k,,dl])=>{
-    $(dl).innerHTML=(vocab[k]||[]).map(v=>'<option value="'+
+    if(!dl) return;
+    const l=(vocab[k]||[]).slice();
+    (SUGESTOES[k]||[]).forEach(v=>{ if(!l.some(x=>x.toLowerCase()===v.toLowerCase())) l.push(v); });
+    $(dl).innerHTML=l.map(v=>'<option value="'+
       v.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;")+'">').join("");
   });
 }
@@ -1512,7 +1688,9 @@ function closeEnd(){ $("endSheet").classList.add("hide"); }
 FICHA.forEach(([k,el])=>{
   $(el).addEventListener("input", e=>{ ficha[k]=e.target.value; pintaNome(); save(); });
   $(el).addEventListener("change", e=>{ ficha[k]=e.target.value.trim(); e.target.value=ficha[k];
-    pintaNome(); if(started) ev({ev:"ficha",campo:k,valor:ficha[k]}); });
+    pintaNome(); if(started) ev({ev:"ficha",campo:k,valor:ficha[k]});
+    if(k==="concurso") sugereDoConcurso();
+    if(k==="banca") sugereDaBanca(); });
 });
 $("mData").addEventListener("change", e=>{ ficha.data=e.target.value||hojeISO();
   e.target.value=ficha.data; pintaNome(); if(started) ev({ev:"ficha",campo:"data",valor:ficha.data}); });
@@ -1543,7 +1721,9 @@ sessao:[
 ["exportado_em","Quando o arquivo foi baixado. Não é quando a sessão aconteceu.","relógio no momento do export"],
 ["sessao","Nome canônico da sessão. Serve de nome de arquivo e de apelido na lista de sessões guardadas.","data + concurso + matéria + subtópico + tipo_sessao + fonte, minúsculo, sem acento, unidos por underline"],
 ["data","Data da sessão, informada por você no setup.","digitado"],
-["concurso","Concurso a que a sessão se refere.","digitado"],
+["concurso","Concurso-alvo da sessão: ANPEC, BACEN ou CGU. É o que diz a que Fila, Edital e Aprendizagens a sessão pertence, e entra no nome. Não é a banca das questões.","escolhido numa lista fechada no setup, obrigatório para começar"],
+["prova","Prova de onde as questões vieram. Pode ser de outro concurso ou de outra banca, sobre assunto do edital do concurso-alvo.","digitado; o concurso sugere a prova dele"],
+["banca","Banca das questões. É ela que sugere o modelo de pontuação, não o concurso.","digitado; o concurso sugere a banca dele"],
 ["materia","Matéria.","digitado"],
 ["subtopico","Subtópico.","digitado"],
 ["fonte","De onde vieram as questões.","digitado"],
@@ -1566,6 +1746,9 @@ sessao:[
 ["tempo_em_pausa_seg","Tempo total com o cronômetro parado dentro da sessão.","soma dos intervalos pause -> resume em relógio de parede"],
 ["olhar","Questões cujo desenvolvimento você quer revisar. Marcado antes de ver o gabarito.","lista das questões marcadas no fechamento"],
 ["gabarito_visto_em","Instante em que você abriu a folha do gabarito pela primeira vez. É a linha que separa escolha limpa de escolha já contaminada.","relógio na primeira abertura"],
+["encerrada_em","Instante em que você encerrou a sessão de vez. Depois dele o relógio não corre mais. Vazio se não foi encerrada.","relógio no toque de Encerrar, depois da confirmação"],
+["n_mudancas_pos_fechamento","Quantas marcações mudaram depois de encerrar: resposta, confiança, flag, borracha, dígito, tipo ou formato. Diferente de zero, o placar já não é só o do tempo de prova: ler os eventos com pos_fechamento.","contagem dos eventos de resposta com pos_fechamento no log"],
+["relogio_oculto_seg","Tempo de sessão que correu com o relógio escondido. Pausa não conta. Vazio em sessão sem cronômetro.","soma dos trechos com o relógio oculto, em tempo de sessão"],
 ["itens_conferem","Itens em que a resposta bate com a chave. Inclui os marcados com B, que acertaram mas não renderam ponto.","C_m + C_B"],
 ["itens_divergem","Itens em que a resposta não bate. Inclui os marcados com B, que erraram mas não custaram ponto.","E_m + E_B"],
 ["itens_em_branco","Itens sem resposta, por qualquer motivo: os declarados N, os T, e também os que ficaram por preencher. É mais largo que N + T.","N + T + itens_nao_preenchidos"],
@@ -1625,7 +1808,7 @@ sessao:[
 ["peso_B_acerto","Quanto vale acertar uma questão de conta.","declarado no setup"],
 ["peso_B_erro","Quanto custa errar uma conta.","declarado no setup"],
 ["tipos_na_prova","Quais tipos de questão esta prova tem. O que não está aqui não aparece na hora de declarar o tipo.","marcado no setup"],
-["modelo","Template de prova aplicado no setup, que preenche eixos e pesos de uma vez.","escolhido no setup"],
+["modelo","Pré-modelo de pontuação aplicado: anpec, cebraspe ou fgv. Vira livre assim que qualquer tipo, eixo ou peso é mexido, porque aí a regra já não é a da banca.","sugerido pela banca ou escolhido no setup; livre se algo foi ajustado"],
 ["estatisticas_completas_em","Nome do arquivo irmão com a tabela de estatísticas.","nome da sessão mais sufixo"],
 ["eventos_completos_em","Nome do arquivo irmão com o log de eventos.","nome da sessão mais sufixo"],
 ["dicionario_em","Nome deste dicionário.","nome da sessão mais sufixo"]
@@ -1700,11 +1883,16 @@ tipos_evento:[
 ["gabarito_aberto","Instante em que você abriu a folha do gabarito pela primeira vez.",""],
 ["gab","Uma chave do gabarito preenchida. Valor vazio significa que você desmarcou.",""],
 ["tempo_esgotado","O limite de tempo de prova acabou e a folha travou.",""],
+["encerrada","Você encerrou a sessão de vez. Todo evento depois dele leva pos_fechamento no extra.",""],
+["relogio","Relógio escondido ou mostrado. oculto=true no extra quando passou a esconder.",""],
 ["recover","Sessão retomada após crash. Carrega o tempo medido até o último registro.",""]
 ]
 };
 
 /* ---------- export ---------- */
+// Eventos que mexem no que foi respondido. É o que n_mudancas_pos_fechamento
+// conta: olhar, gabarito e identificação depois do fim são esperados e não entram.
+const EV_RESPOSTA={mark:1, flag:1, limpa:1, digit:1, digit_del:1, conf:1, tipo:1, param:1};
 const csvv = s => { s=String(s==null?"":s); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
 const olharList = () => Object.keys(olhar).filter(q=>olhar[q]).map(Number).sort((a,b)=>a-b);
 // Em A sai um valor por item, na mesma ordem da coluna itens. Em ME a letra
@@ -1900,7 +2088,8 @@ function buildCSV(){
   V.gerado_por=GERADO_POR;
   V.exportado_em=iso(Date.now());
   V.sessao=base;
-  V.data=ficha.data; V.concurso=ficha.concurso; V.materia=ficha.mat;
+  V.data=ficha.data; V.concurso=ficha.concurso; V.prova=ficha.prova; V.banca=ficha.banca;
+  V.materia=ficha.mat;
   V.subtopico=ficha.sub; V.fonte=ficha.fonte; V.tipo_sessao=ficha.tipo;
   V.cronometrada=cronometrar?1:0;
   V.questoes_no_set=N;
@@ -1918,6 +2107,9 @@ function buildCSV(){
   V.tempo_em_pausa_seg=cronometrar?pz.seg:"";
   V.olhar=olharList().join(" ");
   V.gabarito_visto_em=gabAberto||"";
+  V.encerrada_em=encerrada||"";
+  V.n_mudancas_pos_fechamento=events.filter(e=>e.pos_fechamento && EV_RESPOSTA[e.ev]).length;
+  V.relogio_oculto_seg=cronometrar?Math.round(relogioOcultoSeg()):"";
   V.itens_conferem=tl.ok; V.itens_divergem=tl.erro;
   V.itens_em_branco=tl.branco; V.itens_anulados=tl.anulado;
   [["c","certeza"],["?","duvida"],["x","chute"]].forEach(([k,nome])=>{
@@ -2109,6 +2301,7 @@ async function excluiSessao(id, nome){
     sid=null; started=false; setRunning(false); sairRev(); closeEnd();
     times={}; log=[]; visit=null; ans={}; pags={}; apelidos={}; events=[];
     olhar={}; gab={}; gabAberto=null; curQ=null; invalidaPags();
+    encerrada=null; pintaEncerrada();
     $("setup").classList.remove("hide");
   }
   pintaSessoes(); toast("sessão excluída");
@@ -2119,7 +2312,7 @@ $("toggle").onclick=()=>{ if(!visit) return; setRunning(!running); };
 $("viewBtn").onclick=()=>{ sairRev();
   showPane($("paneLog").classList.contains("on") ? "paneGrid" : "paneLog"); paint(); };
 // Na conferência a navegação entre questões também não pode ligar o cronômetro.
-const irQ = q => revisando ? openQ(q) : select(q);
+const irQ = q => (revisando || encerrada) ? openQ(q) : select(q);
 $("backBtn").onclick=()=>{ if(revisando){ paintRev(); showPane("paneRev"); } else showPane("paneGrid"); };
 $("prevBtn").onclick=()=>{ if(curQ>1) irQ(curQ-1); };
 $("nextBtn").onclick=()=>{ if(curQ<N) irQ(curQ+1); };
@@ -2165,7 +2358,7 @@ document.querySelectorAll("#segUsa button").forEach(b=>b.onclick=()=>{
   if(usa[k] && ["A","ME","B"].filter(x=>usa[x]).length===1){
     toast("a prova precisa ter ao menos um tipo"); return;
   }
-  usa[k]=!usa[k]; pintaUsa(); pintaPesos();
+  usa[k]=!usa[k]; soltaModelo(); pintaUsa(); pintaPesos();
 });
 function pintaPesos(){
   const box=$("pesos"); box.innerHTML="";
@@ -2183,6 +2376,7 @@ function pintaPesos(){
         const v=parseFloat(String(i.value).replace(",","."));
         pesos[k][campo] = isNaN(v) ? 0 : v;
         i.classList.toggle("neg", pesos[k][campo]<0);
+        soltaModelo();
         if(started) paint();
         save();
       };
@@ -2201,8 +2395,17 @@ function pintaTpl(){
   s.value=ficha.template||"livre";
   $("tplHint").textContent=TEMPLATES[s.value] ? TEMPLATES[s.value].nota : "";
 }
-$("tpl").onchange=()=>{
-  const k=$("tpl").value, m=TEMPLATES[k];
+$("tpl").onchange=()=>aplicaTpl($("tpl").value);
+// Um pré-modelo é um pacote: mexer em qualquer peça dele (tipos, eixos, pesos)
+// faz a sessão deixar de ser aquele modelo. Declarar "cebraspe" com o erro
+// valendo −1 seria o export mentindo sobre a regra que foi aplicada.
+function soltaModelo(){
+  if((ficha.template||"livre")==="livre") return;
+  ficha.template="livre"; pintaTpl();
+  if(started) ev({ev:"ficha",campo:"modelo",valor:"livre"});
+}
+function aplicaTpl(k){
+  const m=TEMPLATES[k]; if(!m) return;
   ficha.template=k;
   if(m && m.usa){
     usa=Object.assign({A:false,ME:false,B:false}, m.usa);
@@ -2223,12 +2426,12 @@ function pintaEixos(){
     VALS[t].forEach(v=>{
       const b=document.createElement("button");
       b.textContent=v; b.className = get()===v ? "sel" : "";
-      b.onclick=()=>{ set(v); pintaEixos(); };
+      b.onclick=()=>{ if(get()!==v){ set(v); soltaModelo(); } pintaEixos(); };
       box.appendChild(b);
     });
     const b=document.createElement("button");
     b.textContent="na hora"; b.className="wide"+(get()===0?" sel":"");
-    b.onclick=()=>{ set(0); pintaEixos(); };
+    b.onclick=()=>{ if(get()!==0){ set(0); soltaModelo(); } pintaEixos(); };
     box.appendChild(b);
   });
 }
@@ -2236,6 +2439,10 @@ pintaEixos();
 
 $("startBtn").onclick=()=>{
   // Em modo edição o mesmo botão só fecha e volta — a sessão continua de pé.
+  // Sem concurso a sessão não sabe a que Fila, Edital e Aprendizagens pertence —
+  // e é do nome dela que a correção lê isso. Recusar aqui é mais barato do que
+  // descobrir na correção.
+  if(!ficha.concurso){ toast("escolha o concurso"); $("mConc").focus(); return; }
   if($("setup").classList.contains("editando")){
     $("setup").classList.add("hide");
     $("setup").classList.remove("editando");
@@ -2254,10 +2461,13 @@ $("startBtn").onclick=()=>{
   // ficha NÃO é zerada: os campos de identificação acabaram de ser preenchidos
   // aqui em cima. Só o que é da sessão em si volta ao zero.
   olhar={}; gab={}; gabAberto=null; curQ=null; invalidaPags();
+  encerrada=null; pintaEncerrada();
+  ocultoAccum=0; ocultoDesde = relOculto ? 0 : null;
   document.body.classList.remove("running","paused"); $("toggle").textContent="Pausar";
   const eixo = v => v===0 ? "na hora" : v;
   started=true; ev({ev:"start",questoes:N,sessao:nomeBase(),cronometrada:cronometrar,
     tipo_sessao:ficha.tipo, data:ficha.data, concurso:ficha.concurso,
+    prova:ficha.prova, banca:ficha.banca, relogio_oculto:relOculto,
     materia:ficha.mat, subtopico:ficha.sub, fonte:ficha.fonte,
     ce_itens:eixo(cfgA), me_alternativas:eixo(cfgME), conta_digitos:eixo(cfgB),
     tempo_de_prova_seg:limite||null, modelo:ficha.template||"livre", tipos_na_prova:["A","ME","B"].filter(k=>usa[k]),

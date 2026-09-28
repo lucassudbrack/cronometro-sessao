@@ -36,13 +36,55 @@ que você declarar.
 
 O dropdown de modelo preenche tudo de uma vez:
 
-| modelo | tipos | formato | pesos |
-|---|---|---|---|
-| ANPEC | C/E, conta | 5 itens · 2 dígitos | C/E +X / −X · conta +5X / 0 |
-| BACEN | só C/E | 1 item ⚠ | +X / −0,5X |
+| modelo | tipos | formato | pesos | fonte |
+|---|---|---|---|---|
+| `anpec` | C/E, conta | 5 itens · 2 dígitos | C/E +X / −X · conta +5X / 0 | — |
+| `cebraspe` | só C/E | 1 item | +X / −0,5X | edital BCB 2024, item 8.11.2 |
+| `fgv` | só múltipla | 5 alternativas | +X / 0 | edital CGU 2021, item 10.2 |
 
-⚠ O nº de itens do BACEN está em 1 por questão, padrão Cebraspe — confira no
-edital antes de valer.
+Mexer em **qualquer** peça de um pré-modelo (tipos, eixos, pesos) o transforma
+em `livre` na hora: declarar `cebraspe` com o erro valendo −1 seria o export
+mentindo sobre a regra aplicada. Até a v19 o `cebraspe` se chamava `bacen`;
+sessão guardada com o nome antigo sai `cebraspe` ao ser retomada.
+
+## Concurso, prova, banca e modelo — quatro eixos
+
+Faz-se questão de outra banca sobre assunto do edital, então os eixos são
+separados:
+
+- **Concurso** — o alvo: ANPEC, BACEN ou CGU, lista fechada e **obrigatória**
+  para começar. É o que entra no nome da sessão, e é dele que a correção lê a
+  que Fila, Edital e Aprendizagens a sessão pertence.
+- **Prova de origem** e **banca** — de onde as questões vieram. O concurso
+  sugere as dele (BACEN → BACEN 2024 · Cebraspe; CGU → CGU 2021 · FGV; ANPEC →
+  ANPEC), mas só preenche campo vazio ou ainda com a sugestão de outro concurso.
+- **Modelo** — a regra de pontuação. Quem sugere é a **banca**, nunca o
+  concurso; banca sem pré-modelo deixa o setup em `livre`. Durante a sessão
+  (editar a identificação), trocar a banca não troca o modelo.
+
+## Encerrar a sessão
+
+No fechamento, **Encerrar a sessão** pede confirmação e não tem volta. Depois
+dele nenhum caminho religa o relógio — tocar numa questão, espaço, Retomar —, a
+passada aberta é fechada no instante do toque, e **nada fica travado**, nem com
+o tempo esgotado. Toda mudança posterior sai carimbada `pos_fechamento` no log,
+e o bloco `#` ganha `encerrada_em` e `n_mudancas_pos_fechamento`. Antes disso,
+"Voltar" do fechamento e tocar numa questão religava o relógio — era o que fazia
+mexer na página "reiniciar o contador".
+
+## Relógio oculto
+
+No setup (Visível / Oculto) ou tocando no relógio durante a sessão. Some tudo o
+que mostra tempo decorrido: relógio, total e média do rodapé, tempo por questão
+na grade e na trilha. O tempo continua medido e o limite continua travando. O
+bloco `#` traz `relogio_oculto_seg`, o tempo de **sessão** (pausa não conta) que
+correu com o relógio escondido, e cada troca vira evento `relogio`.
+
+## Copiar o nome
+
+Botão **Copiar** ao lado do nome, no setup e no fechamento: o nome é o título da
+linha no Painel e o nome dos arquivos no Drive, e digitá-lo à mão é onde nasce o
+erro que quebra o casamento por identidade.
 
 ## Tempo de prova
 

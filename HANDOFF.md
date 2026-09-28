@@ -18,7 +18,7 @@ a interface ter que funcionar em ~360 px de largura e sobreviver a perder o foco
 - **Repo:** https://github.com/lucassudbrack/cronometro-sessao — público, branch `main`
 - **App:** https://lucassudbrack.github.io/cronometro-sessao/
 - **Conta GitHub:** `lucassudbrack` (sem "b" no fim; `lucassudbrackb` é o e-mail e não existe no GitHub)
-- **Estado atual:** 30 commits, `CACHE = sessao-v18`, working tree limpo, 433 asserções passando
+- **Estado atual:** `APP_VER = v20` / `CACHE = sessao-v20`, `fmt5`, 486 asserções passando (v20: 28/09/2026)
 
 ### Arquivos
 
@@ -101,6 +101,12 @@ Cada bloco tem um comentário `/* ---------- nome ---------- */`.
     causa de branco. A causa se lê no caderno, na página que `pag` aponta.
 13. **O app não arbitra regra de pontuação** — aplica os pesos declarados no
     setup.
+14. **Encerrar é definitivo (v20).** Depois de `encerrada`, `setRunning(true)`
+    recusa, `select()` vira `openQ()`, `bloqueia()` é falso, o tipo não se
+    auto-atribui, e `ev()` carimba `pos_fechamento`. Não existe "reabrir":
+    é isso que faz do instante um marco que a correção pode usar.
+15. **Relógio oculto é leitura, não registro (v20).** O tempo segue medido; o
+    que se guarda é `relogio_oculto_seg`, em tempo de SESSÃO (pausa não conta).
 
 ---
 
@@ -131,9 +137,17 @@ seguintes. `pags` guarda só o digitado; o default nunca é materializado.
 **`usa = {A,ME,B}`** — quais tipos a prova tem. O desligado some do setup e do
 seletor. Não dá para desligar o último.
 
-**`pesos[tipo] = {acerto, erro}`** em múltiplos de X. Modelos: ANPEC (C/E 5 itens
-+1/−1, conta 2 dígitos +5/0, sem ME) e BACEN (só C/E, +1/−0,5, **1 item por
-questão — padrão Cebraspe, o usuário ia conferir no edital e nunca mandou**).
+**`pesos[tipo] = {acerto, erro}`** em múltiplos de X. Pré-modelos, pela BANCA:
+`anpec` (C/E 5 itens +1/−1, conta 2 dígitos +5/0, sem ME), `cebraspe` (só C/E,
+1 item, +1/−0,5 — edital BCB 2024, item 8.11.2; até a v19 chamava `bacen`) e
+`fgv` (só ME, 5 alternativas, +1/0 — edital CGU 2021, item 10.2). **Mexer em
+qualquer peça solta o modelo para `livre`** (`soltaModelo()`).
+
+**Quatro eixos da identificação (v20):** `concurso` (lista fechada ANPEC/BACEN/CGU,
+obrigatório, entra no nome) · `prova` e `banca` (de onde a questão veio; o
+concurso sugere as dele só em campo vazio ou com sugestão de outro concurso) ·
+`template` (a banca sugere; nunca durante a edição da identificação). Pedido do
+usuário em 28/09: fazer questão de outra banca sobre assunto do edital.
 
 **Snapshot `fmt: 5`.** `retomar()` migra formatos antigos, inclusive `r === "-"`
 (que até o fmt 5 era branco declarado) para `N`. **Não quebre essa migração** —
@@ -303,9 +317,14 @@ a lista de sessões ficando abaixo da dobra.
 
 ## 9. Backlog aberto
 
-**Confirmar com o usuário:**
-- **Nº de itens por questão do BACEN.** Está em 1 (padrão Cebraspe), com aviso
-  na tela do modelo. Ele ia mandar o edital e não mandou.
+**Resolvido em 28/09 (v20):** nº de itens do BACEN conferido no edital (1 por
+questão, item 8.11.2); encerramento definitivo; relógio oculto; copiar o nome;
+múltipla escolha com 5 alternativas quebrando linha a 360 px.
+
+**Próximo, decidido em 28/09:** redefinir `T`/`N` pela fase depois do relógio
+(`T` = resolveu depois do tempo, `N` = não resolveu nem assim) — muda o
+significado de primitivos, vai como `fmt6` num PR próprio. E, quando o banco de
+questões existir, receber e exportar o ID da questão.
 
 **Pendente do brief original (prioridade média):**
 - Nota curta por questão.
