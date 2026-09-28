@@ -173,17 +173,17 @@ const cols = csv.find(l => l.startsWith("q,apelido"));
 const rows = csv.slice(csv.indexOf(cols) + 1);
 EQ("um unico cabecalho de colunas", csv.filter(l => l.startsWith("q,apelido")).length, 1);
 EQ("nenhuma linha antes do bloco de comentario", csv[0].startsWith("#"), true);
-EQ("colunas", cols, "q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito,pontos,pontos_em_jogo_q");
+EQ("colunas", cols, "q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito,pontos,pontos_em_jogo_q,palpite_T");
 EQ("valor com virgula fica citado",
    head.find(l => l.startsWith("# fonte")), '# fonte,"PDF, misto"');
 EQ("o bloco abre pelo nome da sessao",
    head.find(l => l.startsWith("# sessao")), "# sessao,20260802_anpec_estatistica_prova_pdf_misto");
 EQ("e diz que foi cronometrada", head.find(l => l.startsWith("# cronometrada")), "# cronometrada,1");
 EQ("materia no bloco", head.find(l => l.startsWith("# materia")), "# materia,Estatística");
-EQ("linha da Q1", rows[0], '1,1,A,5,"Vc F? V -B FxB",,90,01:30,3,1,1,"",,');
-EQ("linha da Q2 tipo B", rows[1], '2,2,B,3,"?",042,30,00:30,1,2,,"",,');
-EQ("linha da Q3", rows[2], '3,3,,,"",,15,00:15,1,3,1,"",,');
-EQ("linha da Q4 com pagina", rows[3], '4,7-8,,,"",,50,00:50,1,7-8,,"",,');
+EQ("linha da Q1", rows[0], '1,1,A,5,"Vc F? V -B FxB",,90,01:30,3,1,1,"",,,""');
+EQ("linha da Q2 tipo B", rows[1], '2,2,B,3,"?",042,30,00:30,1,2,,"",,,""');
+EQ("linha da Q3", rows[2], '3,3,,,"",,15,00:15,1,3,1,"",,,""');
+EQ("linha da Q4 com pagina", rows[3], '4,7-8,,,"",,50,00:50,1,7-8,,"",,,""');
 EQ("duracao total no bloco",
    head.find(l => l.startsWith("# duracao_total")), "# duracao_total,03:05");
 EQ("Q3 fechada quando o fechamento parou o cronometro", Math.round(times[3]), 15);
@@ -455,9 +455,9 @@ const csv6 = buildCSV().split("\n");
 const c6 = csv6.find(l => l.startsWith("q,apelido"));
 const r6 = csv6.slice(csv6.indexOf(c6) + 1);
 EQ("gabarito de tipo A na coluna, com o anulado",
-   r6[0].split(",").slice(-3)[0], '"V X F"');
-EQ("gabarito de ME", r6[1].split(",").slice(-3)[0], '"B"');
-EQ("gabarito de conta e o numero", r6[2].split(",").slice(-3)[0], '"42"');
+   r6[0].split(",").slice(-4)[0], '"V X F"');
+EQ("gabarito de ME", r6[1].split(",").slice(-4)[0], '"B"');
+EQ("gabarito de conta e o numero", r6[2].split(",").slice(-4)[0], '"42"');
 EQ("bloco traz a contagem",
    csv6.filter(l => /^# itens_(conferem|divergem|anulados),/.test(l)),
    ["# itens_conferem,2", "# itens_divergem,1", "# itens_anulados,1"]);
@@ -865,21 +865,25 @@ marca(6, "Vc");                 // vai virar anulado
 marca(7, "Vc");                 // fica sem gabarito
 setRunning(false);
 
-// T zera a marcação e trava o resto
+// T (regra v21): o item vira branco no placar, mas nao trava — recebe palpite
 EQ("T vira branco automaticamente",
    [ans[1].itens[5].r, ans[1].itens[5].c, ans[1].itens[5].B], [null, null, false]);
-EQ("e trava os botoes de resposta daquele item",
-   [...its()[5].querySelectorAll(".opts button")].slice(0, -1).every(b => b.disabled), true);
+EQ("e os botoes de resposta ficam livres para o palpite",
+   [...its()[5].querySelectorAll(".opts button")].slice(0, -1).some(b => b.disabled), false);
 EQ("B fica indisponivel sem resposta", [...its()[5].querySelectorAll(".flags button")]
    .find(b => b.textContent === "B").disabled, true);
 EQ("o item aparece marcado como sem tempo", its()[5].className.includes("semtempo"), true);
 EQ("os outros itens seguem livres",
    [...its()[0].querySelectorAll(".opts button")].some(b => b.disabled), false);
-// marcar T por cima de uma resposta apaga a resposta
+// marcar T por cima de uma resposta tira a resposta do placar, sem perde-la
 marca(6, "Fx"); flag(6, "T");
-EQ("T por cima de resposta apaga a resposta", ans[1].itens[6].r, null);
-EQ("e o log registra que zerou", events[events.length - 1].zerou, true);
-flag(6, "T"); marca(6, "Vc");   // desfaz e remarca
+EQ("T por cima de resposta tira a resposta do placar", ans[1].itens[6].r, null);
+EQ("e a guarda como palpite", ans[1].itens[6].p, { r: "F", c: "x" });
+EQ("e o log registra que virou palpite", events[events.length - 1].virou_palpite, true);
+flag(6, "T");
+EQ("desligar o T devolve o palpite como resposta",
+   [ans[1].itens[6].r, ans[1].itens[6].c, ans[1].itens[6].p], ["F", "x", null]);
+marca(6, "Vc");   // remarca
 
 gab[1] = { itens: ["V", "F", "V", "F", "V", "V", "X", null], num: "" };
 const X = () => indices();
@@ -1249,10 +1253,10 @@ EQ("e ela fecha", v16("identidade_fecha"), "1");
 // 3) e 5) colunas
 const c16 = buildCSV().split(String.fromCharCode(10)).find(l => l.startsWith("q,apelido"));
 EQ("pag_auto saiu e pontos_em_jogo_q entrou", c16,
-   "q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito,pontos,pontos_em_jogo_q");
+   "q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito,pontos,pontos_em_jogo_q,palpite_T");
 const r16 = buildCSV().split(String.fromCharCode(10));
 EQ("a Q1 traz os dois campos de pontos",
-   r16[r16.indexOf(c16) + 1].split(",").slice(-2), ["0", "4"]);
+   r16[r16.indexOf(c16) + 1].split(",").slice(-3, -1), ["0", "4"]);
 EQ("o doc de pag_auto tambem saiu",
    h16.some(l => l.startsWith("# col.pag_auto")), false);
 
@@ -1462,6 +1466,84 @@ EQ("sessao nao encerrada volta a poder correr", $("toggle").disabled, false);
 retomar(snap19);
 EQ("sessao encerrada continua encerrada depois de retomar", [typeof encerrada, $("toggle").disabled], ["string", true]);
 setOculto(false);
+
+/* ---- cenário 20 (v21, fmt6): T recebe palpite depois do tempo e conta como branco ---- */
+Object.keys(localStorage).filter(k => k.startsWith("sessao:")).forEach(k => localStorage.removeItem(k));
+idx = []; sid = null;
+$("newBtn").click();
+$("mConc").value = "ANPEC"; $("mConc").dispatchEvent(new Event("change"));
+$("tpl").value = "anpec"; $("tpl").dispatchEvent(new Event("change"));
+$("mMat").value = "Palpite"; $("mMat").dispatchEvent(new Event("change"));
+$("mProva").value = "ANPEC 2020"; $("mProva").dispatchEvent(new Event("change"));
+document.querySelector('#segRel button[data-r="0"]').click();
+$("nIn").value = "2"; $("limIn").value = "1"; apelidos = {}; paintApelidos();
+$("startBtn").click();
+EQ("sessao nova segue a regra do palpite", tPalpite, true);
+const it20 = () => [...document.querySelectorAll("#answerArea .item")];
+const op20 = (i, txt) => [...it20()[i].querySelectorAll(".opts button")].find(b => b.textContent === txt);
+const fl20 = (i, f) => [...it20()[i].querySelectorAll(".flags button")].find(b => b.textContent === f);
+select(1); document.querySelector('#typeRow button[data-t="A"]').click();
+op20(0, "Vc").click();          // C_m
+fl20(1, "T").click();           // T, e fica sem palpite: tempo e branco
+fl20(2, "T").click();           // T, vai ganhar palpite depois do tempo
+fl20(3, "B").click();           // N
+                                // item 4 fica vazio: T declarado depois do tempo
+EQ("com T o B some: T sem palpite ja e tempo e branco", fl20(1, "B").disabled, true);
+select(2); document.querySelector('#typeRow button[data-t="B"]').click();
+[...document.querySelectorAll("#answerArea .flags button")].find(b => b.textContent === "T").click();
+adv(70000); checaLimite();
+EQ("o tempo esgotou e a folha travou", [travado, bloqueia()], [true, true]);
+
+// depois do tempo: so o que foi deixado por tempo se mexe
+curQ = 1; renderQ();
+EQ("resposta dada no tempo continua travada", op20(0, "Fc").disabled, true);
+EQ("item em T aceita palpite com a folha travada", op20(2, "Fc").disabled, false);
+op20(2, "Fc").click();
+EQ("o palpite fica ao lado, a resposta segue vazia", [ans[1].itens[2].r, ans[1].itens[2].p], [null, { r: "F", c: "c" }]);
+EQ("o palpite sai carimbado depois do tempo", (() => { const e = events[events.length - 1]; return [e.ev, e.pos_limite]; })(), ["palpite", true]);
+EQ("desligar o T com a folha travada nao pode", fl20(2, "T").disabled, true);
+EQ("item vazio pode ser declarado T depois do tempo", fl20(4, "T").disabled, false);
+fl20(4, "T").click(); op20(4, "F?").click();
+EQ("e recebe palpite", ans[1].itens[4].p, { r: "F", c: "?" });
+EQ("o item com palpite aparece tracejado", op20(2, "Fc").className, "sel palp");
+curQ = 2; renderQ();
+const pad20 = t => [...document.querySelectorAll("#answerArea .numpad button")].find(b => b.textContent === t);
+pad20("4").click(); pad20("2").click();
+[...document.querySelectorAll("#answerArea .opts button")].find(b => b.textContent === "? dúvida").click();
+EQ("conta em T tambem recebe palpite", [ans[2].num, ans[2].itens[0].p], ["", { r: "42", c: "?" }]);
+
+gab[1] = { itens: ["V", "V", "F", "F", "V"], num: "" };
+gab[2] = { itens: [null], num: "42" };
+const X20 = indices(), cp20 = contaPalpites();
+EQ("os estados: T e T resolvido sao ambos T", [X20.C_m, X20.N, X20.T, X20.itens_nao_preenchidos], [1, 1, 4, 0]);
+EQ("o palpite nao pontua: so o C_m conta", [X20.pontos, X20.pontos_em_jogo], [1, 10]);
+EQ("tres T tiveram palpite", cp20.com, 3);
+EQ("dois certos (sabia e faltou tempo), um errado (conteudo)", [cp20.certo, cp20.errado], [2, 1]);
+const h20 = buildCSV().split(String.fromCharCode(10));
+const v20 = k => (h20.find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];
+EQ("o bloco declara a regra e os palpites",
+   ["T_aceita_palpite", "T_com_palpite", "T_palpite_certo", "T_palpite_errado"].map(v20), ["1", "3", "2", "1"]);
+const cab20 = h20.find(l => l.startsWith("q,apelido"));
+const lin20 = h20.slice(h20.indexOf(cab20) + 1);
+EQ("a coluna palpite_T alinha com os itens", lin20[0].split(",").pop(), '"- - Fc - F?"');
+EQ("e traz o palpite da conta", lin20[1].split(",").pop(), '"42?"');
+EQ("a coluna itens nao muda: T segue -T", lin20[0].split(",")[4], '"Vc -T -T -B -T"');
+EQ("o evento palpite esta no dicionario",
+   dicRows().filter(r => r.arq === "tipos_de_evento").some(r => r.chave === "palpite"), true);
+EQ("e o fmt subiu", GERADO_POR.split(" ").pop(), "fmt6");
+
+// sessao antiga (sem a marca) segue a regra velha: T zera a marcacao
+const velho20 = JSON.parse(JSON.stringify(snapshot()));
+delete velho20.tPalpite; velho20.travado = false;
+retomar(velho20);
+EQ("snapshot sem a marca volta com a regra velha", tPalpite, false);
+curQ = 1; renderQ();
+op20(3, "×").click(); op20(3, "Vc").click(); fl20(3, "T").click();
+EQ("na regra velha T apaga a resposta", [ans[1].itens[3].r, ans[1].itens[3].p || null], [null, null]);
+EQ("e o log diz que zerou", events[events.length - 1].zerou, true);
+EQ("e o bloco nao inventa contagem de palpite",
+   (() => { const h = buildCSV().split(String.fromCharCode(10)); const v = k => (h.find(l => l.startsWith("# " + k + ",")) || "").split(",")[1];
+     return ["T_aceita_palpite", "T_com_palpite"].map(v); })(), ["0", ""]);
 
 P("");
 P("eventos gravados: " + events.length + "  |  tipos: " +

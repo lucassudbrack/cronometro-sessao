@@ -80,6 +80,23 @@ na grade e na trilha. O tempo continua medido e o limite continua travando. O
 bloco `#` traz `relogio_oculto_seg`, o tempo de **sessão** (pausa não conta) que
 correu com o relógio escondido, e cada troca vira evento `relogio`.
 
+## T: deixei por tempo — e o palpite depois do tempo (v21, `fmt6`)
+
+`T` é "deixei por tempo": não cheguei, ou vi que ia demorar. Depois que o tempo
+acaba, a folha trava para tudo **menos para os itens em `T`**: você tenta, e se
+resolver marca o palpite ali mesmo (resposta e confiança, ou os dígitos da conta).
+O palpite aparece tracejado e **nunca pontua** — todo `T` é branco no placar,
+resolvido ou não. `T` sem palpite é tempo e branco; com `T` ligado o `B` some,
+porque seria dizer a mesma coisa duas vezes.
+
+- Ligar `T` num item já respondido move a resposta para o palpite; desligar
+  devolve. Nada se perde. Com a folha travada o `T` só liga (declarar depois do
+  tempo que ficou para trás) e nunca desliga, porque isso poria o palpite no placar.
+- O export ganha a coluna `palpite_T` na tabela de questões e, no bloco `#`,
+  `T_aceita_palpite`, `T_com_palpite`, `T_palpite_certo` e `T_palpite_errado`.
+- Sessão criada antes da v21 e retomada segue a regra velha (T zera a marcação) e
+  sai com `T_aceita_palpite = 0`: é o corte da série de `T`.
+
 ## Copiar o nome
 
 Botão **Copiar** ao lado do nome, no setup e no fechamento: o nome é o título da
@@ -169,7 +186,7 @@ A identidade é auto-auditável: se não fechar, há item sem destino.
 | `C_B` | declarei que deixaria em branco, e o palpite acertou |
 | `E_B` | declarei que deixaria em branco, e o palpite errou |
 | `N` | em branco com B: enfrentei e não tenho nem direção |
-| `T` | não alcancei por tempo |
+| `T` | deixei por tempo — branco no placar, com ou sem palpite depois do tempo |
 
     C_m + E_m + C_B + E_B + N + T + itens_nao_preenchidos = I
 
@@ -199,7 +216,7 @@ motivo sai também `valor_do_branco_pontos`: quando o erro não pune, a versão 
 contagem diz que a disciplina é neutra, e ela custou o acerto que você abriu mão.
 
 **Só existem dois brancos legítimos.** `N` é branco com a flag B: enfrentei e
-não tenho nem direção. `T` é não alcancei por tempo. Item sem resposta e sem
+não tenho nem direção. `T` é deixei por tempo. Item sem resposta e sem
 flag nenhuma não é estado da prova — é lacuna de preenchimento, conta em
 `itens_nao_preenchidos`, e a conferência cobra: em sessão fechada tem que ser
 zero.

@@ -142,6 +142,9 @@
   .opts{display:flex; gap:3px}
   .opts button{flex:1; padding:10px 2px; font-family:var(--mono); font-size:12px; text-transform:none; letter-spacing:0}
   .opts button.sel{background:var(--brass); border-color:var(--brass); color:#1B1406}
+  /* palpite do T: marcado, mas fora do placar — tracejado para não parecer resposta */
+  .opts button.sel.palp{background:transparent; border:1px dashed var(--brass); color:var(--brass)}
+  .numdisp.palp{border-style:dashed; color:var(--brass)}
   .opts .sep{flex:0 0 5px}
   .item.me .row{flex-wrap:wrap}
   .item.me .opts{flex:1 1 100%; flex-wrap:wrap; row-gap:5px; column-gap:8px}
@@ -290,7 +293,7 @@
 
 <div class="pane" id="paneQ">
   <div class="revbar" id="revbar">Conferência — o cronômetro não corre e esta correção fica marcada como tal no log.</div>
-  <div class="travbar">Tempo de prova esgotado: a folha está travada. Vá para a conferência se precisar corrigir um registro.</div>
+  <div class="travbar">Tempo de prova esgotado: a folha está travada, menos os itens deixados por tempo (T), que seguem abertos para o palpite. Para corrigir outro registro, use a conferência.</div>
   <div class="qhead">
     <button id="prevBtn">◀</button>
     <div class="sp"></div>
@@ -489,8 +492,9 @@
     <button id="fimEnd">Fechamento</button>
   </div>
   <button id="fimVer" style="padding:12px">Ver a grade</button>
-  <p class="hint">A folha está travada: o que for corrigido daqui em diante sai
-     marcado no log como feito depois do tempo.</p>
+  <p class="hint">A folha está travada, menos os itens em T: tente-os agora e marque
+     o palpite — ele não pontua. Tudo daqui em diante sai marcado no log como feito
+     depois do tempo.</p>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -513,7 +517,7 @@ const $ = id => document.getElementById(id);
    ele altera, e é só isso que ele altera.
    APP_FMT é o formato do snapshot, e é a mesma constante que snapshot() grava:
    quem lê o CSV descobre qual migração de retomar() aquele estado atravessou. */
-const APP_VER="v20", APP_COMMIT="1a20130", APP_FMT=5;
+const APP_VER="v21", APP_COMMIT="1a20130", APP_FMT=6;
 const GERADO_POR="app sessao "+APP_VER+" "+APP_COMMIT+" fmt"+APP_FMT;
 
 const KEY = "sessao:v1";
@@ -613,6 +617,12 @@ let encerrada=null;
 // a leitura de pacing. ocultoDesde está em tempo de SESSÃO (sessionLive), não de
 // parede, então pausa não conta como tempo oculto.
 let relOculto=false, ocultoDesde=null, ocultoAccum=0;
+// Regra do T (v21, fmt6). T = "deixei por tempo". Depois do tempo você tenta; se
+// resolver, o palpite fica guardado AO LADO do item (it.p), nunca no lugar da
+// resposta: T conta como branco no placar, resolvido ou não, e o palpite só diz
+// se você sabia e faltou tempo. Sessão anterior à regra (snapshot sem a marca)
+// segue a regra velha, em que T zera a marcação — ela é o que foi medido então.
+let tPalpite=true;
 // Tempo de prova. Ao esgotar, o cronômetro para e a folha trava — mas a
 // conferência e o gabarito continuam abertos, porque corrigir um registro não é
 // responder. Tudo que sair depois vai carimbado com pos_limite.
@@ -647,7 +657,7 @@ function ev(o){
   exported=false; saveNow();
 }
 
-const novoItem = () => ({r:null,c:null,B:false,T:false});
+const novoItem = () => ({r:null,c:null,B:false,T:false,p:null});
 // Com o eixo em aberto a questão nasce sem parâmetro: tipo A sem itens, ME sem
 // alt, B sem dig. paramDe devolve null nesse estado, e a folha só aparece
 // depois da escolha — o app não vai supor cinco itens porque cinco é comum.
@@ -1028,7 +1038,9 @@ function renderQ(){
     const box=document.createElement("div"); box.className="item"+(a.tipo==="ME"?" me":"")+(it.T?" semtempo":"")+((it.r===null&&it.B)?" embranco":"");
     const lab=document.createElement("div"); lab.className="itemlab";
     lab.textContent = (a.tipo==="ME" ? "alternativa" : ("item "+(idx+1)))+
-      (it.T ? " · não alcancei por tempo" :
+      (it.T ? (tPalpite ? (it.p ? " · por tempo · palpite depois do tempo, não pontua"
+                                : " · por tempo · sem palpite = tempo e branco")
+                        : " · não alcancei por tempo") :
        (it.r===null && it.B) ? " · em branco, sem direção" : "");
     box.appendChild(lab);
     const row=document.createElement("div"); row.className="row";
@@ -1040,9 +1052,15 @@ function renderQ(){
       ["c","?","x"].forEach(cf=>{
         const b=document.createElement("button");
         b.textContent=L+cf;
-        b.className = (it.r===L && it.c===cf) ? "sel" : "";
-        b.disabled = it.T || bloqueia();   // não alcancei por tempo: não há o que marcar
-        b.onclick=()=>{ it.r=L; it.c=cf; ev({ev:"mark",q:q,item:idx+1,resp:L,conf:cf}); renderQ(); paint(); save(); };
+        const palp=podePalpite(it);
+        b.className = palp ? ((it.p && it.p.r===L && it.p.c===cf) ? "sel palp" : "")
+                           : ((it.r===L && it.c===cf) ? "sel" : "");
+        // Regra velha: T não tem o que marcar. Regra nova: T recebe palpite, até com a folha travada.
+        b.disabled = tPalpite ? (palp ? false : bloqueia()) : (it.T || bloqueia());
+        b.onclick=()=>{
+          if(podePalpite(it)){ it.p={r:L, c:cf}; ev({ev:"palpite",q:q,item:idx+1,resp:L,conf:cf}); }
+          else { it.r=L; it.c=cf; ev({ev:"mark",q:q,item:idx+1,resp:L,conf:cf}); }
+          renderQ(); paint(); save(); };
         alvo.appendChild(b);
       });
       if(a.tipo!=="ME" && li<letters.length-1){ const s=document.createElement("div"); s.className="sep"; opts.appendChild(s); }
@@ -1050,7 +1068,7 @@ function renderQ(){
     const bl=document.createElement("button");
     bl.textContent="×"; bl.className="limpa"; bl.title="apaga a marcação deste item";
     bl.disabled = bloqueia() || (it.r===null && !it.B && !it.T);
-    bl.onclick=()=>{ it.r=null; it.c=null; it.B=false; it.T=false;
+    bl.onclick=()=>{ it.r=null; it.c=null; it.B=false; it.T=false; it.p=null;
       ev({ev:"limpa",q:q,item:idx+1}); renderQ(); paint(); };
     opts.appendChild(bl);
     row.appendChild(opts);
@@ -1058,7 +1076,9 @@ function renderQ(){
     [["B","B"],["T","T"]].forEach(([k,txt])=>{
       const b=document.createElement("button");
       b.textContent=txt; b.className = it[k] ? "sel" : "";
-      b.disabled = (k==="B" && it.T) || bloqueia();   // com resposta é "eu omitiria"; sem resposta é N
+      // B com T não existe: T sem palpite já é "tempo e branco". T com a folha
+      // travada só liga (declarar depois do tempo que não alcançou), nunca desliga.
+      b.disabled = (k==="B" && it.T) || (k==="T" ? (bloqueia() && !(tPalpite && tDesligavel(it))) : bloqueia());
       b.onclick=()=>{ marcaFlag(it,k,q,idx+1); renderQ(); paint(); };
       fl.appendChild(b);
     });
@@ -1072,37 +1092,62 @@ function renderQ(){
 // coexistiriam, e os seis estados deixariam de ser mutuamente exclusivos.
 function marcaFlag(it,k,q,item,aB){
   it[k]=!it[k];
-  if(k==="T" && it.T){
+  let extra={};
+  if(k==="T" && tPalpite){
+    // Nada se perde: a resposta vira palpite ao ligar o T, e o palpite volta a
+    // ser resposta ao desligar. Quem decide o placar é a flag, não o apagamento.
+    if(it.T){
+      if(it.r!==null){ it.p={r:it.r, c:it.c}; it.r=null; it.c=null; if(aB) aB.num=""; extra={virou_palpite:true}; }
+      it.B=false;
+    } else if(it.p && it.p.r){
+      it.r=it.p.r; it.c=it.p.c; if(aB) aB.num=it.p.r; it.p=null; extra={palpite_voltou:true};
+    } else it.p=null;
+  } else if(k==="T" && it.T){
     it.r=null; it.c=null; it.B=false;
     if(aB) aB.num="";
+    extra={zerou:true};
   }
-  ev(Object.assign({ev:"flag",q:q,flag:k,on:it[k]}, item?{item:item}:{},
-                   (k==="T"&&it.T)?{zerou:true}:{}));
+  ev(Object.assign({ev:"flag",q:q,flag:k,on:it[k]}, item?{item:item}:{}, extra));
 }
+// Depois do tempo a folha trava, mas o item deixado por tempo continua aberto
+// para o palpite — é a fase depois do relógio. Desligar o T com a folha travada
+// não: devolveria o palpite ao placar. Conferência e encerramento não travam.
+const podePalpite = it => tPalpite && it.T;
+const tDesligavel = it => !bloqueia() || !tPalpite ? true : !it.T && it.r===null;
 function renderB(area,a){
   const q=curQ, it=a.itens[0];
   area.innerHTML="";
   const disp=document.createElement("div"); disp.className="numdisp";
-  disp.textContent = it.r==="-" ? "—" : (a.num||"").padStart(a.dig,"_");
+  const palpB=podePalpite(it);
+  disp.textContent = palpB ? ((it.p&&it.p.r)||"").padStart(a.dig,"_")
+                   : it.r==="-" ? "—" : (a.num||"").padStart(a.dig,"_");
+  disp.classList.toggle("palp", palpB);
   area.appendChild(disp);
   const pad=document.createElement("div"); pad.className="numpad";
   for(let d=0;d<=9;d++){
     const b=document.createElement("button"); b.textContent=d;
-    b.disabled = it.T || bloqueia();
-    b.onclick=()=>{ if(a.num.length<a.dig){ a.num+=d; it.r=a.num; ev({ev:"digit",q:q,d:d});
+    b.disabled = tPalpite ? (palpB ? false : bloqueia()) : (it.T || bloqueia());
+    b.onclick=()=>{
+      if(podePalpite(it)){ const p=it.p||{r:"",c:null};
+        if(p.r.length<a.dig){ p.r+=d; it.p=p; ev({ev:"palpite",q:q,d:d}); renderQ(); paint(); save(); }
+        return; }
+      if(a.num.length<a.dig){ a.num+=d; it.r=a.num; ev({ev:"digit",q:q,d:d});
       renderQ(); paint(); save(); } };
     pad.appendChild(b);
   }
   const del=document.createElement("button"); del.textContent="←";
-  del.disabled = it.T || bloqueia();
-  del.onclick=()=>{ if(!a.num.length) return;
+  del.disabled = tPalpite ? (palpB ? !(it.p&&it.p.r) : bloqueia()) : (it.T || bloqueia());
+  del.onclick=()=>{
+    if(podePalpite(it)){ if(!(it.p&&it.p.r)) return; it.p.r=it.p.r.slice(0,-1);
+      ev({ev:"palpite",q:q,num:it.p.r}); renderQ(); paint(); return; }
+    if(!a.num.length) return;
     a.num=a.num.slice(0,-1); it.r=a.num||null;
     ev({ev:"digit_del",q:q,num:a.num}); renderQ(); paint(); };
   pad.appendChild(del);
   const bl=document.createElement("button"); bl.textContent="×"; bl.className="limpa";
   bl.title="apaga a marcação desta questão";
   bl.disabled = bloqueia() || (!a.num && !it.B && !it.T);
-  bl.onclick=()=>{ a.num=""; it.r=null; it.c=null; it.B=false; it.T=false;
+  bl.onclick=()=>{ a.num=""; it.r=null; it.c=null; it.B=false; it.T=false; it.p=null;
     ev({ev:"limpa",q:q}); renderQ(); paint(); };
   pad.appendChild(bl);
   area.appendChild(pad);
@@ -1114,9 +1159,12 @@ function renderB(area,a){
   const opts=document.createElement("div"); opts.className="opts";
   [["c","certeza"],["?","dúvida"],["x","chute"]].forEach(([cf,nm])=>{
     const b=document.createElement("button"); b.textContent=cf+" "+nm;
-    b.className = it.c===cf ? "sel" : "";
-    b.disabled = it.T || bloqueia();
-    b.onclick=()=>{ it.c=cf; ev({ev:"conf",q:q,conf:cf}); renderQ(); save(); };
+    b.className = palpB ? ((it.p && it.p.c===cf) ? "sel palp" : "") : (it.c===cf ? "sel" : "");
+    b.disabled = tPalpite ? (palpB ? false : bloqueia()) : (it.T || bloqueia());
+    b.onclick=()=>{
+      if(podePalpite(it)){ it.p=it.p||{r:"",c:null}; it.p.c=cf; ev({ev:"palpite",q:q,conf:cf}); }
+      else { it.c=cf; ev({ev:"conf",q:q,conf:cf}); }
+      renderQ(); save(); };
     opts.appendChild(b);
   });
   row.appendChild(opts);
@@ -1124,7 +1172,7 @@ function renderB(area,a){
   [["B","B"],["T","T"]].forEach(([k,txt])=>{
     const b=document.createElement("button"); b.textContent=txt;
     b.className = it[k] ? "sel" : "";
-    b.disabled = (k==="B" && it.T) || bloqueia();
+    b.disabled = (k==="B" && it.T) || (k==="T" ? (bloqueia() && !(tPalpite && tDesligavel(it))) : bloqueia());
     b.onclick=()=>{ marcaFlag(it,k,q,null,a); renderQ(); paint(); };
     fl.appendChild(b);
   });
@@ -1192,7 +1240,7 @@ function snapshot(){
     }
   }
   return {fmt:APP_FMT,nome:nomeBase(),N,goal,limite,travado,cfgA,cfgME,cfgB,usa,pesos,cronometrar,times:t,log,visit:vis,ans,pags,apelidos,ficha,olhar,gab,gabAberto,events,
-          encerrada,relOculto,ocultoAccum,ocultoDesde,
+          encerrada,relOculto,ocultoAccum,ocultoDesde,tPalpite,
           sessionAccum:sessionLive(),running,ts:Date.now()};
 }
 
@@ -1258,6 +1306,8 @@ function retomar(prev){
   if(ficha.template==="bacen") ficha.template="cebraspe";
   normalizaConcurso();
   encerrada=prev.encerrada||null;
+  // Snapshot sem a marca é de antes da regra v21: nele, T zerava a marcação.
+  tPalpite=!!prev.tPalpite;
   ocultoAccum=prev.ocultoAccum||0; relOculto=!!prev.relOculto;
   ocultoDesde = relOculto ? (prev.ocultoDesde!=null ? prev.ocultoDesde : prev.sessionAccum||0) : null;
   document.body.classList.toggle("relOculto", relOculto);
@@ -1774,7 +1824,11 @@ sessao:[
 ["C_B","Itens em que você declarou que deixaria em branco na prova real e o palpite acertou.","contagem sobre os itens"],
 ["E_B","Itens em que você declarou que deixaria em branco e o palpite errou.","contagem sobre os itens"],
 ["N","Itens em branco com a flag B: enfrentei e não tenho nem direção.","contagem sobre os itens"],
-["T","Itens marcados com T declarando que você não alcançou por tempo. T zera a marcação e vira branco.","contagem sobre os itens"],
+["T","Itens deixados por tempo. Contam como branco no placar, tenham ou não palpite depois do tempo (regra v21). Em sessão com T_aceita_palpite 0, a regra velha: T zerava a marcação.","contagem sobre os itens"],
+["T_aceita_palpite","1 quando a sessão segue a regra v21: o item em T guarda o palpite dado depois do tempo. 0 em sessão criada antes dela, em que T zerava a marcação — é o corte da série de T.","marca gravada na criação da sessão"],
+["T_com_palpite","Itens em T que receberam palpite: você tentou depois do tempo e chegou a uma resposta. T menos isto são os que ficaram em tempo e branco.","contagem sobre os itens em T"],
+["T_palpite_certo","Itens em T cujo palpite bate com a chave: sabia e faltou tempo. É pacing, não conteúdo — pede o caminho mais rápido, não Aprendizagem.","palpite contra o gabarito; anulado e sem chave ficam fora"],
+["T_palpite_errado","Itens em T cujo palpite não bate com a chave: nem com tempo saiu. É conteúdo.","palpite contra o gabarito; anulado e sem chave ficam fora"],
 ["itens_nao_preenchidos","Itens sem resposta e sem flag nenhuma. Não é estado da prova: é lacuna de preenchimento, e em sessão fechada tem que ser zero.","contagem sobre os itens"],
 ["I","Itens válidos. É o denominador de quase tudo. Anulado e item sem gabarito ficam fora.","C_m + E_m + C_B + E_B + N + T + itens_nao_preenchidos"],
 ["identidade_fecha","Auditoria fraca: I é DEFINIDO como a soma dos estados, então isto quase sempre dá 1. Só cai para 0 se aparecer um estado fora dos sete. Não detecta item perdido, contado duas vezes, nem divergência contra itens_no_set — para essa, compare itens_no_set com I + itens_anulados_fora + itens_sem_gabarito.","compara a soma dos estados com I, que é a mesma soma"],
@@ -1827,7 +1881,8 @@ questao:[
 ["olhar","1 quando você marcou a questão para revisar depois.","marcado no fechamento, antes do gabarito"],
 ["gabarito","Chave de cada item na mesma ordem da coluna itens. X é anulada e vazio é sem gabarito.","digitado na folha do gabarito"],
 ["pontos","Pontos líquidos desta questão. Vazio quando ela não tem gabarito.","soma dos pesos dos itens dela, contando só C_m e E_m"],
-["pontos_em_jogo_q","Peso de acerto somado sobre os itens válidos desta questão.","o pontos_em_jogo recortado por questão; anulado e sem gabarito ficam fora"]
+["pontos_em_jogo_q","Peso de acerto somado sobre os itens válidos desta questão.","o pontos_em_jogo recortado por questão; anulado e sem gabarito ficam fora"],
+["palpite_T","Palpite dado depois do tempo nos itens deixados por tempo, um token por item na ordem de itens: resposta e confiança, ou - quando aquele item não tem palpite. Vazio se a questão não tem nenhum. Nunca pontua: o item segue T no placar.","marcado com o T ligado, em geral na fase depois do relógio"]
 ],
 estat:[
 ["tipo","Tipo do item: A certo/errado, ME múltipla, B conta.","do tipo declarado na questão"],
@@ -1885,6 +1940,7 @@ tipos_evento:[
 ["tempo_esgotado","O limite de tempo de prova acabou e a folha travou.",""],
 ["encerrada","Você encerrou a sessão de vez. Todo evento depois dele leva pos_fechamento no extra.",""],
 ["relogio","Relógio escondido ou mostrado. oculto=true no extra quando passou a esconder.",""],
+["palpite","Palpite num item deixado por tempo: resposta e confiança, dígito, ou o número depois de apagar. Não pontua.",""],
 ["recover","Sessão retomada após crash. Carrega o tempo medido até o último registro.",""]
 ]
 };
@@ -1892,7 +1948,7 @@ tipos_evento:[
 /* ---------- export ---------- */
 // Eventos que mexem no que foi respondido. É o que n_mudancas_pos_fechamento
 // conta: olhar, gabarito e identificação depois do fim são esperados e não entram.
-const EV_RESPOSTA={mark:1, flag:1, limpa:1, digit:1, digit_del:1, conf:1, tipo:1, param:1};
+const EV_RESPOSTA={mark:1, flag:1, limpa:1, digit:1, digit_del:1, conf:1, tipo:1, param:1, palpite:1};
 const csvv = s => { s=String(s==null?"":s); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
 const olharList = () => Object.keys(olhar).filter(q=>olhar[q]).map(Number).sort((a,b)=>a-b);
 // Em A sai um valor por item, na mesma ordem da coluna itens. Em ME a letra
@@ -1951,6 +2007,31 @@ function estadoDoItem(q,i){
   if(r==="branco")  return it.T ? "T" : (it.B ? "N" : "nao_preenchido");
   if(it.B)          return r==="ok" ? "C_B" : "E_B";
   return r==="ok" ? "C_m" : "E_m";
+}
+// Palpite do T contra o gabarito. Não entra em estado nenhum nem no placar: é o
+// diagnóstico de "sabia e faltou tempo" (certo) contra "é conteúdo" (errado).
+// Só existe com o item de fato em T, e fica fora com anulado ou sem chave.
+function palpiteRes(q,i){
+  const a=ans[q], g=gab[q]; if(!a || !g) return null;
+  const it=a.itens[i]; if(!it || !it.T || !it.p || !it.p.r) return null;
+  if(estadoDoItem(q,i)!=="T") return null;
+  if(a.tipo==="B") return g.num ? (it.p.r===g.num ? "certo" : "errado") : null;
+  if(g.itens[i]==null || g.itens[i]===NULA) return null;
+  return it.p.r===g.itens[i] ? "certo" : "errado";
+}
+function contaPalpites(){
+  const c={com:0, certo:0, errado:0};
+  for(let q=1;q<=N;q++){ const a=ans[q]; if(!a || paramDe(a)==null) continue;
+    a.itens.forEach((it,i)=>{
+      if(it.T && it.p && it.p.r && estadoDoItem(q,i)==="T") c.com++;
+      const r=palpiteRes(q,i); if(r) c[r]++;
+    }); }
+  return c;
+}
+function palpiteStr(q){
+  const a=ans[q]; if(!a) return "";
+  const tk=a.itens.map(it=>(it.T && it.p && it.p.r) ? it.p.r+(it.p.c||"") : "-");
+  return tk.every(t=>t==="-") ? "" : tk.join(" ");
 }
 function indices(){
   const n={C_m:0,E_m:0,C_B:0,E_B:0,N:0,T:0,nao_preenchido:0,anulado:0,sem_gabarito:0};
@@ -2110,6 +2191,11 @@ function buildCSV(){
   V.encerrada_em=encerrada||"";
   V.n_mudancas_pos_fechamento=events.filter(e=>e.pos_fechamento && EV_RESPOSTA[e.ev]).length;
   V.relogio_oculto_seg=cronometrar?Math.round(relogioOcultoSeg()):"";
+  const cp=contaPalpites();
+  V.T_aceita_palpite=tPalpite?1:0;
+  V.T_com_palpite=tPalpite?cp.com:"";
+  V.T_palpite_certo=tPalpite?cp.certo:"";
+  V.T_palpite_errado=tPalpite?cp.errado:"";
   V.itens_conferem=tl.ok; V.itens_divergem=tl.erro;
   V.itens_em_branco=tl.branco; V.itens_anulados=tl.anulado;
   [["c","certeza"],["?","duvida"],["x","chute"]].forEach(([k,nome])=>{
@@ -2150,7 +2236,7 @@ function buildCSV(){
   const L=[];
   DIC.sessao.forEach(([k])=>L.push("# "+k+","+csvv(V[k]===undefined||V[k]===null?"":String(V[k]))));
   const ef=pagsEfetivas();
-  L.push("q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito,pontos,pontos_em_jogo_q");
+  L.push("q,apelido,tipo,param,itens,numerica,segundos,mmss,passadas,pag,olhar,gabarito,pontos,pontos_em_jogo_q,palpite_T");
   for(let q=1;q<=N;q++){
     const a=ans[q]; const t=times[q]||0;
     // passes() entra no filtro porque em sessão sem relógio uma questão visitada
@@ -2164,7 +2250,7 @@ function buildCSV(){
             temT?Math.round(t):"", temT?fmt(t):"", passes(q),
             csvv(ef[q]?ef[q].v:""), olhar[q]?1:"",'"'+gabStr(q)+'"',
             pontosQ(q)===null?"":pontosQ(q),
-            pontosJogoQ(q)===null?"":pontosJogoQ(q)].join(","));
+            pontosJogoQ(q)===null?"":pontosJogoQ(q), '"'+palpiteStr(q)+'"'].join(","));
   }
   return L.join("\n");
 }
@@ -2461,13 +2547,13 @@ $("startBtn").onclick=()=>{
   // ficha NÃO é zerada: os campos de identificação acabaram de ser preenchidos
   // aqui em cima. Só o que é da sessão em si volta ao zero.
   olhar={}; gab={}; gabAberto=null; curQ=null; invalidaPags();
-  encerrada=null; pintaEncerrada();
+  encerrada=null; pintaEncerrada(); tPalpite=true;
   ocultoAccum=0; ocultoDesde = relOculto ? 0 : null;
   document.body.classList.remove("running","paused"); $("toggle").textContent="Pausar";
   const eixo = v => v===0 ? "na hora" : v;
   started=true; ev({ev:"start",questoes:N,sessao:nomeBase(),cronometrada:cronometrar,
     tipo_sessao:ficha.tipo, data:ficha.data, concurso:ficha.concurso,
-    prova:ficha.prova, banca:ficha.banca, relogio_oculto:relOculto,
+    prova:ficha.prova, banca:ficha.banca, relogio_oculto:relOculto, t_aceita_palpite:true,
     materia:ficha.mat, subtopico:ficha.sub, fonte:ficha.fonte,
     ce_itens:eixo(cfgA), me_alternativas:eixo(cfgME), conta_digitos:eixo(cfgB),
     tempo_de_prova_seg:limite||null, modelo:ficha.template||"livre", tipos_na_prova:["A","ME","B"].filter(k=>usa[k]),

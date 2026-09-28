@@ -18,7 +18,7 @@ a interface ter que funcionar em ~360 px de largura e sobreviver a perder o foco
 - **Repo:** https://github.com/lucassudbrack/cronometro-sessao — público, branch `main`
 - **App:** https://lucassudbrack.github.io/cronometro-sessao/
 - **Conta GitHub:** `lucassudbrack` (sem "b" no fim; `lucassudbrackb` é o e-mail e não existe no GitHub)
-- **Estado atual:** `APP_VER = v20` / `CACHE = sessao-v20`, `fmt5`, 486 asserções passando (v20: 28/09/2026)
+- **Estado atual:** `APP_VER = v21` / `CACHE = sessao-v21`, `fmt6`, 514 asserções passando (v21: 28/09/2026)
 
 ### Arquivos
 
@@ -72,15 +72,17 @@ Cada bloco tem um comentário `/* ---------- nome ---------- */`.
    ausência. Passada interrompida por crash volta marcada `trunc` e vale como
    **piso**, não medida.
 2. **Só existem dois brancos legítimos:** `N` (branco com flag B — enfrentei e
-   não tenho nem direção) e `T` (não alcancei por tempo). Item sem resposta e
+   não tenho nem direção) e `T` (deixei por tempo). Item sem resposta e
    sem flag **não é estado da prova** — é lacuna de preenchimento, conta em
    `itens_nao_preenchidos`, e a conferência cobra como falta.
 3. **O botão `×` é borracha, não estado.** Limpa resposta, confiança e flags.
    Antes era `—` e declarava branco; mudou porque "tracinho preenchido" era
    ambíguo entre N e T.
-4. **`T` bloqueia a marcação** do item e o torna branco. T não é jeito de
-   responder — é a declaração de que você não chegou lá. Sem o bloqueio, T e
-   resposta coexistiriam e os estados deixariam de ser mutuamente exclusivos.
+4. **`T` é branco, e o palpite mora ao lado (v21).** Até a v20, `T` zerava a
+   marcação e travava o item. Desde a v21 o item em `T` guarda o palpite dado
+   depois do tempo em `it.p = {r, c}` — NUNCA em `it.r` —, então todo o cálculo
+   que já existia continua vendo branco, e só `palpiteRes()`/`contaPalpites()`
+   olham o palpite. Sessão sem a marca `tPalpite` no snapshot segue a regra velha.
 5. **Item marcado B rende 0 e tira 0, mas continua no denominador.** Ele estava
    em jogo e você não o levou. É isso que normaliza o índice contra a prova.
 6. **Revisita é dado de primeira classe.** Tempo fragmentado ≠ contínuo.
@@ -125,7 +127,7 @@ olhar[q]    = true
 | `r` | `V`/`F` (A) · `A`–`J` (ME) · dígitos (B) · `null` = sem resposta |
 | `c` | `c` certeza ~90% · `?` dúvida ~60-75% · `x` chute ~50/50 |
 | `B` | com resposta: "eu omitiria na prova real". Sem resposta: **é o estado N** |
-| `T` | não alcancei por tempo. Força `r=null` e trava o item |
+| `T` | deixei por tempo. Força `r=null`; o palpite depois do tempo vai em `p` (v21) |
 
 **Defaults em cascata:** `apelido → pag → ordem`. A página é **cumulativa** — se
 a Q3 ocupa `1-2`, a Q4 nasce na `3`. Digitar uma página **re-ancora** as
@@ -166,7 +168,7 @@ Todo item válido cai em **exatamente um**:
 | `C_B` | declarei que deixaria em branco, palpite acertou |
 | `E_B` | declarei que deixaria em branco, palpite errou |
 | `N` | branco com B |
-| `T` | não alcancei por tempo |
+| `T` | deixei por tempo (com ou sem palpite: branco) |
 | `nao_preenchido` | sem resposta e sem flag — lacuna, não estado da prova |
 
     C_m + E_m + C_B + E_B + N + T + itens_nao_preenchidos = I
@@ -321,10 +323,11 @@ a lista de sessões ficando abaixo da dobra.
 questão, item 8.11.2); encerramento definitivo; relógio oculto; copiar o nome;
 múltipla escolha com 5 alternativas quebrando linha a 360 px.
 
-**Próximo, decidido em 28/09:** redefinir `T`/`N` pela fase depois do relógio
-(`T` = resolveu depois do tempo, `N` = não resolveu nem assim) — muda o
-significado de primitivos, vai como `fmt6` num PR próprio. E, quando o banco de
-questões existir, receber e exportar o ID da questão.
+**Resolvido em 28/09 (v21, `fmt6`):** `T` com palpite depois do tempo, sempre
+branco no placar. A fixture de contrato do `fmt6` é gerada pelo app real:
+`tests/fixtures/gera-fixture-fmt6.sh` (roteiro em `testes/fixture-fmt6.js`).
+
+**Próximo:** quando o banco de questões existir, receber e exportar o ID da questão.
 
 **Pendente do brief original (prioridade média):**
 - Nota curta por questão.
